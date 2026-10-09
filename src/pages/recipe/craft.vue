@@ -83,7 +83,25 @@
         </button>
       </view>
 
-      <!-- 动作 4: 装饰与享用 -->
+      <!-- 动作 4: 注入/倾倒 -->
+      <view v-else-if="currentStep.actionType === 'pour'" class="pour-board glass-card">
+        <text class="shake-title">注入配料 (Pour & Fill)</text>
+        <text class="shake-subtitle">{{ currentStep.description }}</text>
+        <view class="stage-icon-wrap">
+          <text class="stage-icon">🥃</text>
+        </view>
+      </view>
+
+      <!-- 动作 5: 装饰与点睛 -->
+      <view v-else-if="currentStep.actionType === 'garnish'" class="pour-board glass-card">
+        <text class="shake-title">饰品点缀 (Garnish)</text>
+        <text class="shake-subtitle">{{ currentStep.description }}</text>
+        <view class="stage-icon-wrap">
+          <text class="stage-icon">🌿</text>
+        </view>
+      </view>
+
+      <!-- 动作 6: 完成享用 -->
       <view v-else class="finish-board glass-card">
         <text class="finish-icon">🥂</text>
         <text class="finish-title">完成调制！即可享用</text>
@@ -157,6 +175,16 @@
       </view>
     </view>
   </view>
+
+  <!-- 兜底异常空状态 (避免无数据时黑屏) -->
+  <view v-else class="craft-empty-container">
+    <view class="empty-card glass-card">
+      <text class="empty-icon">🍸</text>
+      <text class="empty-title">配方数据加载中或未找到</text>
+      <text class="empty-desc">未能获取到当前特调的调酒步骤信息，请返回重试</text>
+      <button class="btn-gold empty-btn" @tap="goBack">返回上一页</button>
+    </view>
+  </view>
 </template>
 
 <script setup lang="ts">
@@ -176,6 +204,7 @@ const recipeId = ref('');
 const portions = ref(1);
 const currentStepIndex = ref(0);
 const checkedIngredients = ref<Set<string>>(new Set());
+const customRecipe = ref<Recipe | null>(null);
 
 // 倒计时器状态
 const timerSecondsLeft = ref(12);
@@ -194,6 +223,20 @@ onLoad((query) => {
   if (query && query.portions) {
     portions.value = Number(query.portions) || 1;
   }
+
+  // 尝试读取 AI 侍酒定制或临时特调配方
+  if (!RECIPES_MAP.get(recipeId.value) || recipeId.value.startsWith('ai_')) {
+    try {
+      const cached = uni.getStorageSync('mixocraft_custom_recipe');
+      if (cached && (cached.id === recipeId.value || recipeId.value.startsWith('ai_'))) {
+        customRecipe.value = cached;
+        recipeId.value = cached.id;
+      }
+    } catch (e) {
+      console.error('Failed to load custom recipe in craft', e);
+    }
+  }
+
   resetTimerForCurrentStep();
 });
 
@@ -202,6 +245,9 @@ onUnmounted(() => {
 });
 
 const recipe = computed<Recipe | undefined>(() => {
+  if (customRecipe.value && customRecipe.value.id === recipeId.value) {
+    return customRecipe.value;
+  }
   return RECIPES_MAP.get(recipeId.value);
 });
 
@@ -716,5 +762,58 @@ function goBack() {
 .modal-actions {
   display: flex;
   gap: 20rpx;
+}
+
+.stage-icon-wrap {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 40rpx 0;
+}
+
+.stage-icon {
+  font-size: 110rpx;
+  line-height: 1;
+}
+
+.craft-empty-container {
+  min-height: 100vh;
+  background-color: #0A0A0F;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40rpx;
+  box-sizing: border-box;
+}
+
+.empty-card {
+  padding: 60rpx 40rpx;
+  text-align: center;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.empty-icon {
+  font-size: 80rpx;
+  margin-bottom: 24rpx;
+}
+
+.empty-title {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #FFFFFF;
+  margin-bottom: 12rpx;
+}
+
+.empty-desc {
+  font-size: 24rpx;
+  color: #9CA3AF;
+  margin-bottom: 40rpx;
+}
+
+.empty-btn {
+  width: 60%;
 }
 </style>

@@ -295,6 +295,12 @@ function generateCocktail() {
 
 function startCrafting() {
   if (generatedResult.value) {
+    try {
+      // 将 AI 定制配方存入本地临时存储，确保调酒工作台能直接读取并完整渲染步骤
+      uni.setStorageSync('mixocraft_custom_recipe', generatedResult.value);
+    } catch (e) {
+      console.error('Failed to cache AI recipe', e);
+    }
     // 传递进入工作台
     uni.navigateTo({
       url: `/pages/recipe/craft?id=${generatedResult.value.id}`

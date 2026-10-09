@@ -226,14 +226,30 @@ const favoritesStore = useFavoritesStore();
 const recipeId = ref('');
 const portions = ref(1);
 const customStates = ref<Record<string, CustomizedIngredientState>>({});
+const customRecipe = ref<Recipe | null>(null);
 
 onLoad((query) => {
   if (query && query.id) {
     recipeId.value = query.id;
   }
+  // 尝试读取 AI 侍酒定制或临时特调配方
+  if (!RECIPES_MAP.get(recipeId.value) || recipeId.value.startsWith('ai_')) {
+    try {
+      const cached = uni.getStorageSync('mixocraft_custom_recipe');
+      if (cached && (cached.id === recipeId.value || recipeId.value.startsWith('ai_'))) {
+        customRecipe.value = cached;
+        recipeId.value = cached.id;
+      }
+    } catch (e) {
+      console.error('Failed to load custom recipe in detail', e);
+    }
+  }
 });
 
 const recipe = computed<Recipe | undefined>(() => {
+  if (customRecipe.value && customRecipe.value.id === recipeId.value) {
+    return customRecipe.value;
+  }
   return RECIPES_MAP.get(recipeId.value);
 });
 
