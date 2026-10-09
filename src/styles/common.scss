@@ -1,0 +1,129 @@
+/* ===================================================
+   微醺工坊 (MixoCraft) 全局轻奢暗黑视觉体系
+   =================================================== */
+
+:root {
+  --bg-main: #0E0F14;
+  --bg-card: #181922;
+  --bg-card-subtle: #212230;
+  --bg-glass: rgba(28, 30, 42, 0.75);
+  
+  --color-gold: #F59E0B;
+  --color-champagne: #FDE68A;
+  --color-emerald: #10B981;
+  --color-rose: #F43F5E;
+  --color-cyan: #06B6D4;
+  
+  --text-primary: #FFFFFF;
+  --text-secondary: #9CA3AF;
+  --text-muted: #6B7280;
+  
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-accent: rgba(245, 158, 11, 0.3);
+}
+
+page {
+  background-color: #0E0F14;
+  color: #FFFFFF;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  box-sizing: border-box;
+}
+
+/* 磨砂玻璃卡片 */
+.glass-card {
+  background: rgba(24, 25, 34, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20rpx;
+  box-shadow: 0 12rpx 36rpx rgba(0, 0, 0, 0.4);
+}
+
+.glass-card-amber {
+  background: linear-gradient(145deg, rgba(35, 28, 20, 0.85), rgba(20, 20, 28, 0.9));
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  border-radius: 24rpx;
+  box-shadow: 0 12rpx 36rpx rgba(245, 158, 11, 0.08);
+}
+
+/* 按钮通用 */
+.btn-gold {
+  background: linear-gradient(135deg, #F59E0B, #D97706);
+  color: #000000;
+  font-weight: 600;
+  border-radius: 999rpx;
+  padding: 20rpx 40rpx;
+  text-align: center;
+  box-shadow: 0 8rpx 24rpx rgba(245, 158, 11, 0.35);
+  transition: all 0.2s ease;
+}
+
+.btn-gold:active {
+  transform: scale(0.97);
+  opacity: 0.9;
+}
+
+.btn-subtle {
+  background: rgba(255, 255, 255, 0.08);
+  color: #E5E7EB;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999rpx;
+  padding: 16rpx 32rpx;
+  text-align: center;
+}
+
+.btn-subtle:active {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* 徽章 Badge */
+.badge-abv {
+  display: inline-flex;
+  align-items: center;
+  gap: 6rpx;
+  background: rgba(245, 158, 11, 0.15);
+  color: #F59E0B;
+  font-size: 22rpx;
+  font-weight: 600;
+  padding: 6rpx 16rpx;
+  border-radius: 999rpx;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.badge-can-make {
+  display: inline-flex;
+  align-items: center;
+  gap: 6rpx;
+  background: rgba(16, 185, 129, 0.18);
+  color: #10B981;
+  font-size: 22rpx;
+  font-weight: 600;
+  padding: 6rpx 16rpx;
+  border-radius: 999rpx;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.badge-missing-one {
+  display: inline-flex;
+  align-items: center;
+  gap: 6rpx;
+  background: rgba(244, 63, 94, 0.15);
+  color: #F43F5E;
+  font-size: 22rpx;
+  font-weight: 600;
+  padding: 6rpx 16rpx;
+  border-radius: 999rpx;
+  border: 1px solid rgba(244, 63, 94, 0.3);
+}
+
+/* 标签 Chip */
+.chip-tag {
+  display: inline-block;
+  background: rgba(255, 255, 255, 0.06);
+  color: #9CA3AF;
+  font-size: 22rpx;
+  padding: 6rpx 16rpx;
+  border-radius: 8rpx;
+  margin-right: 12rpx;
+  margin-bottom: 8rpx;
+}
