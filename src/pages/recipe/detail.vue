@@ -9,7 +9,7 @@
           <text class="name-en">{{ recipe.nameEn }}</text>
         </view>
         <view class="hero-tags">
-          <text class="badge-abv">{{ recipe.calculatedAbv }}% ABV</text>
+          <text class="badge-abv">{{ displayAbv }}% ABV</text>
           <text class="badge-method">{{ methodName }}</text>
           <text class="badge-glass">{{ glassName }}</text>
         </view>
@@ -56,7 +56,7 @@
         <view class="ing-header">
           <view class="ing-header-left">
             <text class="section-title">所需原料 ({{ portions }}人份)</text>
-            <text class="ing-hint">💡 点击单行可快速勾选入库/移出</text>
+            <text class="ing-hint">💡 点击勾选入库，或在下方自由平替换料</text>
           </view>
           <text class="ing-ready-count">
             {{ availableCount }}/{{ recipe.ingredients.length }} 样已就绪
@@ -67,37 +67,83 @@
           <view
             v-for="(item, idx) in recipe.ingredients"
             :key="idx"
-            class="ing-item"
-            :class="{ owned: isItemOwned(item.ingredientId) }"
-            @tap="toggleItem(item.ingredientId)"
+            class="ing-item-card"
           >
-            <view class="ing-left">
-              <view class="ing-check-circle" :class="{ checked: isItemOwned(item.ingredientId) }">
-                <text v-if="isItemOwned(item.ingredientId)">✓</text>
-              </view>
-              <text class="ing-emoji">{{ getIngredientIcon(item.ingredientId) }}</text>
-              <view class="ing-texts">
-                <view class="ing-title-row">
-                  <text class="ing-name">{{ getIngredientName(item.ingredientId) }}</text>
-                  <text v-if="isItemOwned(item.ingredientId)" class="status-tag-owned">已备齐</text>
-                  <text v-else class="status-tag-missing">缺货·点我入库</text>
+            <!-- 主行：勾选拥有/禁用 + 原料名称 + 容量 -->
+            <view
+              class="ing-item"
+              :class="{ 
+                owned: isItemOwned(getActiveIngredientId(item.ingredientId)),
+                disabled: isItemDisabled(item.ingredientId)
+              }"
+              @tap="toggleItem(getActiveIngredientId(item.ingredientId))"
+            >
+              <view class="ing-left">
+                <view 
+                  class="ing-check-circle" 
+                  :class="{ checked: isItemOwned(getActiveIngredientId(item.ingredientId)) }"
+                >
+                  <text v-if="isItemOwned(getActiveIngredientId(item.ingredientId))">✓</text>
                 </view>
-                <text v-if="item.substituteNote" class="ing-sub-note">{{ item.substituteNote }}</text>
+                <text class="ing-emoji">{{ getIngredientIcon(getActiveIngredientId(item.ingredientId)) }}</text>
+                <view class="ing-texts">
+                  <view class="ing-title-row">
+                    <text class="ing-name" :class="{ 'strike-through': isItemDisabled(item.ingredientId) }">
+                      {{ getIngredientName(getActiveIngredientId(item.ingredientId)) }}
+                    </text>
+                    <text v-if="customStates[item.ingredientId]?.selectedId !== item.ingredientId" class="status-tag-sub">
+                      已平替
+                    </text>
+                    <text v-else-if="isItemOwned(item.ingredientId)" class="status-tag-owned">已备齐</text>
+                    <text v-else class="status-tag-missing">缺货·点我入库</text>
+                  </view>
+                  <text v-if="item.substituteNote" class="ing-sub-note">{{ item.substituteNote }}</text>
+                </view>
+              </view>
+              <view class="ing-right">
+                <text class="ing-vol">
+                  {{ formatIngredientVolume(item.amountMl, item.customUnit) }}
+                </text>
               </view>
             </view>
-            <view class="ing-right">
-              <text class="ing-vol">
-                {{ formatIngredientVolume(item.amountMl, item.customUnit) }}
-              </text>
+
+            <!-- 辅助操作栏：平替切换 + 不放此料开关 -->
+            <view class="ing-sub-bar">
+              <!-- 平替选择胶囊 -->
+              <view v-if="getSubstitutes(item.ingredientId).length > 0" class="sub-chips">
+                <text class="sub-label">🔄 换平替：</text>
+                <view
+                  v-for="subId in getSubstitutes(item.ingredientId)"
+                  :key="subId"
+                  class="sub-chip"
+                  :class="{ active: customStates[item.ingredientId]?.selectedId === subId }"
+                  @tap="switchSubstitute(item.ingredientId, subId)"
+                >
+                  <text>{{ getIngredientIcon(subId) }} {{ getIngredientName(subId) }}</text>
+                </view>
+              </view>
+
+              <!-- 不放此料微调按钮 -->
+              <view 
+                class="exclude-chip" 
+                :class="{ active: isItemDisabled(item.ingredientId) }"
+                @tap="toggleItemEnabled(item.ingredientId)"
+              >
+                <text>{{ isItemDisabled(item.ingredientId) ? '✕ 已排除此料' : '不加此料' }}</text>
+              </view>
             </view>
           </view>
         </view>
       </view>
 
-      <!-- 风味平衡雷达图 -->
+      <!-- 风味平衡雷达图 (实时动态绑定当前自选原料) -->
       <view class="flavor-card glass-card">
-        <text class="section-title">五维风味平衡图</text>
-        <FlavorRadar :flavor="recipe.flavor" :size="240" />
+        <view class="flavor-header">
+          <text class="section-title">五维风味平衡图</text>
+          <text v-if="dynamicResult.isModified" class="dynamic-badge">✨ 已按自选原料实时推演</text>
+          <text v-else class="baseline-badge">标准经典风味</text>
+        </view>
+        <FlavorRadar :flavor="displayFlavor" :size="200" />
       </view>
 
       <!-- 分步制作指南 -->
@@ -164,6 +210,7 @@ import type { Recipe } from '../../types/recipe';
 import { useCabinetStore } from '../../stores/cabinet';
 import { useFavoritesStore } from '../../stores/favorites';
 import { formatVolume } from '../../utils/unit';
+import { calculateDynamicFlavorAndABV, type CustomizedIngredientState } from '../../utils/flavor';
 import FlavorRadar from '../../components/FlavorRadar.vue';
 import UnitSelector from '../../components/UnitSelector.vue';
 
@@ -172,6 +219,7 @@ const favoritesStore = useFavoritesStore();
 
 const recipeId = ref('');
 const portions = ref(1);
+const customStates = ref<Record<string, CustomizedIngredientState>>({});
 
 onLoad((query) => {
   if (query && query.id) {
@@ -181,6 +229,41 @@ onLoad((query) => {
 
 const recipe = computed<Recipe | undefined>(() => {
   return RECIPES_MAP.get(recipeId.value);
+});
+
+// 初始化自选原料状态
+watch(recipe, (r) => {
+  if (r) {
+    const states: Record<string, CustomizedIngredientState> = {};
+    for (const item of r.ingredients) {
+      states[item.ingredientId] = {
+        originalId: item.ingredientId,
+        selectedId: item.ingredientId,
+        isEnabled: true,
+      };
+    }
+    customStates.value = states;
+  }
+}, { immediate: true });
+
+// 实时动态风味与 ABV 计算
+const dynamicResult = computed(() => {
+  if (!recipe.value) {
+    return {
+      dynamicFlavor: { sweetness: 3, sourness: 3, strength: 3, bitterness: 1, refreshment: 3 },
+      dynamicAbv: 0,
+      isModified: false,
+    };
+  }
+  return calculateDynamicFlavorAndABV(recipe.value, customStates.value, recipe.value.method);
+});
+
+const displayAbv = computed(() => {
+  return dynamicResult.value.dynamicAbv;
+});
+
+const displayFlavor = computed(() => {
+  return dynamicResult.value.dynamicFlavor;
 });
 
 const isFavorite = computed(() => {
@@ -219,6 +302,52 @@ function toggleItem(id: string) {
     icon: 'none',
     duration: 1000
   });
+}
+
+function getActiveIngredientId(originalId: string): string {
+  return customStates.value[originalId]?.selectedId || originalId;
+}
+
+function isItemDisabled(originalId: string): boolean {
+  return customStates.value[originalId]?.isEnabled === false;
+}
+
+function getSubstitutes(ingId: string): string[] {
+  const ing = INGREDIENTS_MAP.get(ingId);
+  return ing?.substitutes || [];
+}
+
+function switchSubstitute(originalId: string, subId: string) {
+  if (!customStates.value[originalId]) {
+    customStates.value[originalId] = { originalId, selectedId: subId, isEnabled: true };
+  } else {
+    if (customStates.value[originalId].selectedId === subId) {
+      customStates.value[originalId].selectedId = originalId;
+      uni.showToast({
+        title: '已切回原配方：' + getIngredientName(originalId),
+        icon: 'none'
+      });
+    } else {
+      customStates.value[originalId].selectedId = subId;
+      uni.showToast({
+        title: '已平替为：' + getIngredientName(subId) + ' (风味已重算)',
+        icon: 'none'
+      });
+    }
+  }
+  uni.vibrateShort({ type: 'light' });
+}
+
+function toggleItemEnabled(originalId: string) {
+  if (customStates.value[originalId]) {
+    customStates.value[originalId].isEnabled = !customStates.value[originalId].isEnabled;
+    uni.vibrateShort({ type: 'light' });
+    const enabled = customStates.value[originalId].isEnabled;
+    uni.showToast({
+      title: enabled ? '已恢复使用此原料' : '已排除此原料 (风味已重算)',
+      icon: 'none'
+    });
+  }
 }
 
 function formatIngredientVolume(amountMl: number, customUnit?: string): string {
@@ -527,6 +656,113 @@ function startCrafting() {
   padding: 2rpx 10rpx;
   border-radius: 6rpx;
   font-weight: 500;
+}
+
+.status-tag-sub {
+  font-size: 18rpx;
+  color: #06B6D4;
+  background: rgba(6, 182, 212, 0.15);
+  padding: 2rpx 10rpx;
+  border-radius: 6rpx;
+  font-weight: 500;
+}
+
+.strike-through {
+  text-decoration: line-through;
+  opacity: 0.45;
+}
+
+.ing-item.disabled {
+  opacity: 0.55;
+  background: rgba(255, 255, 255, 0.01);
+}
+
+.ing-item-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 16rpx;
+  overflow: hidden;
+  margin-bottom: 14rpx;
+}
+
+.ing-item-card .ing-item {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+}
+
+.ing-sub-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12rpx 20rpx;
+  background: rgba(0, 0, 0, 0.2);
+  border-top: 1px dashed rgba(255, 255, 255, 0.05);
+}
+
+.sub-chips {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  flex-wrap: wrap;
+}
+
+.sub-label {
+  font-size: 18rpx;
+  color: #9CA3AF;
+}
+
+.sub-chip {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 4rpx 14rpx;
+  border-radius: 999rpx;
+  font-size: 18rpx;
+  color: #D1D5DB;
+  transition: all 0.2s ease;
+}
+
+.sub-chip.active {
+  background: #F59E0B;
+  border-color: #F59E0B;
+  color: #000000;
+  font-weight: 700;
+}
+
+.exclude-chip {
+  font-size: 18rpx;
+  color: #9CA3AF;
+  padding: 4rpx 14rpx;
+  border-radius: 999rpx;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.exclude-chip.active {
+  background: rgba(239, 68, 68, 0.2);
+  color: #F87171;
+  font-weight: 600;
+}
+
+.flavor-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12rpx;
+}
+
+.dynamic-tag {
+  background: rgba(245, 158, 11, 0.2);
+  color: #FDE68A;
+  font-size: 20rpx;
+  font-weight: 600;
+  padding: 4rpx 16rpx;
+  border-radius: 999rpx;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.baseline-tag {
+  font-size: 20rpx;
+  color: #9CA3AF;
 }
 
 .ing-name {
