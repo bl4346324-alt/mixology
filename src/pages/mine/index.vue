@@ -98,6 +98,12 @@
         </view>
       </view>
     </view>
+
+    <!-- 法律与未成年人保护合规声明 -->
+    <view class="compliance-footer">
+      <text class="compliance-text">🔞 未成年人严禁饮酒 · 过量饮酒有害健康</text>
+      <text class="compliance-sub">酒后请勿驾车 · 本程序仅供居家调酒文化与风味生活记录参考</text>
+    </view>
   </view>
 </template>
 
@@ -349,5 +355,26 @@ function formatDate(timestamp: number): string {
 
 .unit-selector-wrap {
   margin-top: 10rpx;
+}
+
+.compliance-footer {
+  margin-top: 60rpx;
+  margin-bottom: 30rpx;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8rpx;
+}
+
+.compliance-text {
+  font-size: 20rpx;
+  color: #6B7280;
+  font-weight: 500;
+}
+
+.compliance-sub {
+  font-size: 18rpx;
+  color: #4B5563;
 }
 </style>
