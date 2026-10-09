@@ -54,7 +54,10 @@
       <!-- 原料清单与酒柜匹配情况 -->
       <view class="ingredients-card glass-card">
         <view class="ing-header">
-          <text class="section-title">所需原料 ({{ portions }}人份)</text>
+          <view class="ing-header-left">
+            <text class="section-title">所需原料 ({{ portions }}人份)</text>
+            <text class="ing-hint">💡 点击单行可快速勾选入库/移出</text>
+          </view>
           <text class="ing-ready-count">
             {{ availableCount }}/{{ recipe.ingredients.length }} 样已就绪
           </text>
@@ -66,11 +69,19 @@
             :key="idx"
             class="ing-item"
             :class="{ owned: isItemOwned(item.ingredientId) }"
+            @tap="toggleItem(item.ingredientId)"
           >
             <view class="ing-left">
-              <text class="ing-dot">{{ isItemOwned(item.ingredientId) ? '✓' : '○' }}</text>
+              <view class="ing-check-circle" :class="{ checked: isItemOwned(item.ingredientId) }">
+                <text v-if="isItemOwned(item.ingredientId)">✓</text>
+              </view>
+              <text class="ing-emoji">{{ getIngredientIcon(item.ingredientId) }}</text>
               <view class="ing-texts">
-                <text class="ing-name">{{ getIngredientName(item.ingredientId) }}</text>
+                <view class="ing-title-row">
+                  <text class="ing-name">{{ getIngredientName(item.ingredientId) }}</text>
+                  <text v-if="isItemOwned(item.ingredientId)" class="status-tag-owned">已备齐</text>
+                  <text v-else class="status-tag-missing">缺货·点我入库</text>
+                </view>
                 <text v-if="item.substituteNote" class="ing-sub-note">{{ item.substituteNote }}</text>
               </view>
             </view>
@@ -193,6 +204,21 @@ const availableCount = computed(() => {
 
 function getIngredientName(id: string): string {
   return INGREDIENTS_MAP.get(id)?.nameZh || id;
+}
+
+function getIngredientIcon(id: string): string {
+  return INGREDIENTS_MAP.get(id)?.icon || '🍾';
+}
+
+function toggleItem(id: string) {
+  cabinetStore.toggleIngredient(id);
+  uni.vibrateShort({ type: 'light' });
+  const isNowOwned = cabinetStore.hasIngredient(id);
+  uni.showToast({
+    title: isNowOwned ? '✓ 已标记为已备齐' : '已从酒柜移除',
+    icon: 'none',
+    duration: 1000
+  });
 }
 
 function formatIngredientVolume(amountMl: number, customUnit?: string): string {
@@ -390,14 +416,25 @@ function startCrafting() {
 .ing-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   margin-bottom: 20rpx;
+}
+
+.ing-header-left {
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
 }
 
 .section-title {
   font-size: 28rpx;
   font-weight: 700;
   color: #FFFFFF;
+}
+
+.ing-hint {
+  font-size: 20rpx;
+  color: #F59E0B;
 }
 
 .ing-ready-count {
@@ -415,15 +452,21 @@ function startCrafting() {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16rpx 20rpx;
+  padding: 18rpx 20rpx;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 14rpx;
+  border-radius: 16rpx;
+  transition: all 0.2s ease;
+}
+
+.ing-item:active {
+  transform: scale(0.985);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .ing-item.owned {
   background: rgba(16, 185, 129, 0.08);
-  border-color: rgba(16, 185, 129, 0.25);
+  border-color: rgba(16, 185, 129, 0.3);
 }
 
 .ing-left {
@@ -432,19 +475,58 @@ function startCrafting() {
   gap: 16rpx;
 }
 
-.ing-dot {
-  font-size: 24rpx;
-  color: #6B7280;
+.ing-check-circle {
+  width: 38rpx;
+  height: 38rpx;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22rpx;
+  color: transparent;
+  flex-shrink: 0;
 }
 
-.ing-item.owned .ing-dot {
-  color: #10B981;
+.ing-check-circle.checked {
+  background: #10B981;
+  border-color: #10B981;
+  color: #FFFFFF;
   font-weight: 800;
+}
+
+.ing-emoji {
+  font-size: 34rpx;
+  line-height: 1;
 }
 
 .ing-texts {
   display: flex;
   flex-direction: column;
+}
+
+.ing-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+}
+
+.status-tag-owned {
+  font-size: 18rpx;
+  color: #10B981;
+  background: rgba(16, 185, 129, 0.15);
+  padding: 2rpx 10rpx;
+  border-radius: 6rpx;
+  font-weight: 500;
+}
+
+.status-tag-missing {
+  font-size: 18rpx;
+  color: #F59E0B;
+  background: rgba(245, 158, 11, 0.15);
+  padding: 2rpx 10rpx;
+  border-radius: 6rpx;
+  font-weight: 500;
 }
 
 .ing-name {
