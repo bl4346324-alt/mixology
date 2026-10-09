@@ -50,16 +50,19 @@ export const RECIPES: Recipe[] = [
       },
       {
         step: 3,
-        title: '注入基酒与加冰',
-        description: '倒入 45ml 白朗姆酒，加入碎冰至杯身 3/4 处，用吧勺轻柔提拉搅拌均匀。',
+        title: '注入基酒与轻柔翻拌',
+        description: '倒入 45ml 白朗姆酒，加入碎冰至杯身 3/4 处，用吧勺轻柔提拉 5 秒使薄荷与酒液均匀散开。',
         actionType: 'stir',
-        timerSeconds: 15
+        timerSeconds: 5,
+        tip: '碎冰较细，轻柔提拉 5 秒即可，切勿打圈搅拌以免碎冰过快融化成水！'
       },
       {
         step: 4,
-        title: '补足气泡与装饰',
-        description: '加满苏打水，顶部加满冰块，插上一枝挺拔的薄荷顶芽装饰。',
-        actionType: 'garnish',
+        title: '补足气泡与垂直一提',
+        description: '加满苏打水，用吧勺由杯底垂直轻提一次（约3秒）混匀即可，插上薄荷顶芽装饰。',
+        actionType: 'stir',
+        timerSeconds: 3,
+        tip: '气泡饮料切忌长时间搅拌，垂直轻提一次即可完美混合比重，保留丰富气泡！'
       }
     ],
     bartenderNote: '品尝时请将吸管放在薄荷叶旁边，每一口吸入酒液时都能同时嗅到芬芳薄荷清香。'
@@ -114,8 +117,9 @@ export const RECIPES: Recipe[] = [
       {
         step: 4,
         title: '垂直一提',
-        description: '用吧勺由杯底垂直往上轻轻提拉一次即可，切勿剧烈打圈搅拌！',
+        description: '用吧勺由杯底垂直往上轻轻提拉一次（约3秒）即可，切勿剧烈打圈搅拌！',
         actionType: 'stir',
+        timerSeconds: 3,
         tip: '气泡饮料剧烈搅拌会跑气变平淡，轻提一次即可完美混合比重。'
       }
     ],
@@ -497,9 +501,10 @@ export const RECIPES: Recipe[] = [
       },
       {
         step: 3,
-        title: '倒满冷藏乌龙茶',
-        description: '倒入 130ml 冰镇三得利无糖乌龙茶，吧勺由下往上提一次即可。',
-        actionType: 'pour',
+        title: '倒满冷藏乌龙茶与轻提',
+        description: '倒入 130ml 冰镇三得利无糖乌龙茶，吧勺由下往上提一次（约3秒）混匀即可。',
+        actionType: 'stir',
+        timerSeconds: 3,
       }
     ],
     bartenderNote: '比例建议 1:3 至 1:4。如果喜欢更清爽，可额外加 10ml 苏打水带来轻微气泡感。'
@@ -554,8 +559,9 @@ export const RECIPES: Recipe[] = [
       {
         step: 4,
         title: '轻提提香',
-        description: '轻轻上下抽动吧勺一次，花香与气泡交织扑面而来。',
+        description: '轻轻上下抽动吧勺一次（约3秒），花香与气泡交织扑面而来。',
         actionType: 'stir',
+        timerSeconds: 3,
       }
     ],
     bartenderNote: '一定要用冷藏后的东方树叶！茶香更凝聚，融水更慢。'

@@ -58,14 +58,20 @@
         </view>
 
         <button class="btn-gold timer-toggle-btn" @tap="toggleTimer">
-          {{ isTimerRunning ? '暂停摇酒' : (timerSecondsLeft === 0 ? '重新计时' : '开始 12 秒节拍摇和') }}
+          {{ isTimerRunning ? '暂停摇酒' : (timerSecondsLeft === 0 ? '重新计时' : `开始 ${currentStepTargetSeconds} 秒节拍摇和`) }}
         </button>
       </view>
 
-      <!-- 动作 3: 搅拌法 Stir 倒计时模式 -->
+      <!-- 动作 3: 搅拌 / 提拉混匀倒计时模式 (自适应长饮提拉与经典搅拌) -->
       <view v-else-if="currentStep.actionType === 'stir'" class="stir-board glass-card">
-        <text class="shake-title">平稳顺滑搅拌 (Stir)</text>
-        <text class="shake-subtitle">吧勺贴紧杯壁，平稳旋转提供 20% 融水率</text>
+        <text class="shake-title">
+          {{ isLightLift ? '轻柔垂直提拉 (Lift & Mix)' : '经典顺滑搅拌 (Classic Stir)' }}
+        </text>
+        <text class="shake-subtitle">
+          {{ isLightLift 
+            ? '吧勺由杯底垂直轻柔提拉 1-2 次混匀即可，切勿打圈搅拌以免气泡跑气' 
+            : '吧勺贴紧杯壁平稳旋转，搅拌降温并释放 18%-20% 纯净融水' }}
+        </text>
 
         <view class="metronome-circle" :class="{ beating: isTimerRunning }">
           <text class="metronome-num">{{ timerSecondsLeft }}</text>
@@ -73,7 +79,7 @@
         </view>
 
         <button class="btn-gold timer-toggle-btn" @tap="toggleTimer">
-          {{ isTimerRunning ? '暂停搅拌' : (timerSecondsLeft === 0 ? '重新计时' : '开始 30 秒顺滑搅拌') }}
+          {{ isTimerRunning ? '暂停计时' : (timerSecondsLeft === 0 ? '重新计时' : `开始 ${currentStepTargetSeconds} 秒${isLightLift ? '轻柔提拉' : '平稳搅拌'}`) }}
         </button>
       </view>
 
@@ -240,11 +246,25 @@ function toggleIngChecked(id: string) {
   }
 }
 
+const currentStepTargetSeconds = computed(() => {
+  if (currentStep.value.timerSeconds) {
+    return currentStep.value.timerSeconds;
+  }
+  if (currentStep.value.actionType === 'shake') return 12;
+  if (currentStep.value.actionType === 'stir') {
+    return (recipe.value?.method === 'build' || recipe.value?.method === 'muddle') ? 5 : 25;
+  }
+  return 10;
+});
+
+const isLightLift = computed(() => {
+  return currentStepTargetSeconds.value <= 8 || recipe.value?.method === 'build' || recipe.value?.method === 'muddle';
+});
+
 function resetTimerForCurrentStep() {
   clearInterval(timerInterval);
   isTimerRunning.value = false;
-  const target = currentStep.value.timerSeconds || 12;
-  timerSecondsLeft.value = target;
+  timerSecondsLeft.value = currentStepTargetSeconds.value;
 }
 
 function toggleTimer() {
@@ -253,7 +273,7 @@ function toggleTimer() {
     isTimerRunning.value = false;
   } else {
     if (timerSecondsLeft.value <= 0) {
-      timerSecondsLeft.value = currentStep.value.timerSeconds || 12;
+      timerSecondsLeft.value = currentStepTargetSeconds.value;
     }
     isTimerRunning.value = true;
     timerInterval = setInterval(() => {
