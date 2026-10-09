@@ -202,7 +202,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
 import { RECIPES_MAP } from '../../data/recipes';
 import { INGREDIENTS_MAP } from '../../data/ingredients';
