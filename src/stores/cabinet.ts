@@ -99,10 +99,24 @@ export const useCabinetStore = defineStore('cabinet', () => {
   }
 
   /**
+   * 判断某个配方原料是否为核心必需品（基酒、利口酒、配液、果汁、糖浆）
+   * 盐边、装饰物、冰块、柠檬皮等为非必需品，不阻碍酒柜可调配计算
+   */
+  function isEssentialIngredient(itemId: string, itemConfig?: { isOptional?: boolean; isGarnish?: boolean }): boolean {
+    if (itemConfig?.isOptional || itemConfig?.isGarnish) return false;
+    const ing = INGREDIENTS_MAP.get(itemId);
+    if (!ing) return false;
+    // 盐边、装饰物与冰块作为非必需品，只要备齐基酒与配液即可检索匹配成功
+    if (ing.category === 'garnish' || ing.category === 'ice') return false;
+    return true;
+  }
+
+  /**
    * 评估单个配方与当前酒柜的匹配结果
    */
   function evaluateRecipe(recipe: Recipe): RecipeMatchResult {
-    const requiredItems = recipe.ingredients.filter(item => !item.isOptional);
+    // 核心必需原料（基酒与配液）
+    const requiredItems = recipe.ingredients.filter(item => isEssentialIngredient(item.ingredientId, item));
     const availableIngredients: string[] = [];
     const missingIngredients: Ingredient[] = [];
     const substitutionsUsed: { originalId: string; substituteId: string }[] = [];

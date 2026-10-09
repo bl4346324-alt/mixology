@@ -58,9 +58,12 @@
             <text class="section-title">所需原料 ({{ portions }}人份)</text>
             <text class="ing-hint">💡 点击勾选入库，或在下方自由平替换料</text>
           </view>
-          <text class="ing-ready-count">
-            {{ availableCount }}/{{ recipe.ingredients.length }} 样已就绪
-          </text>
+          <view class="ing-header-right">
+            <text v-if="isReadyToMake" class="ready-badge-pill">✨ 核心已备齐</text>
+            <text class="ing-ready-count">
+              {{ availableCount }}/{{ recipe.ingredients.length }} 样已就绪
+            </text>
+          </view>
         </view>
 
         <view class="ing-list">
@@ -90,6 +93,9 @@
                   <view class="ing-title-row">
                     <text class="ing-name" :class="{ 'strike-through': isItemDisabled(item.ingredientId) }">
                       {{ getIngredientName(getActiveIngredientId(item.ingredientId)) }}
+                    </text>
+                    <text :class="getItemRoleBadge(item).isEssential ? 'status-tag-essential' : 'status-tag-optional'">
+                      {{ getItemRoleBadge(item).label }}
                     </text>
                     <text v-if="customStates[item.ingredientId]?.selectedId !== item.ingredientId" class="status-tag-sub">
                       已平替
@@ -283,6 +289,29 @@ function isItemOwned(id: string): boolean {
 const availableCount = computed(() => {
   if (!recipe.value) return 0;
   return recipe.value.ingredients.filter(item => cabinetStore.hasIngredient(item.ingredientId)).length;
+});
+
+function getItemRoleBadge(item: any): { label: string; isEssential: boolean } {
+  if (item.isOptional || item.isGarnish) {
+    return { label: '装饰/可选', isEssential: false };
+  }
+  const ing = INGREDIENTS_MAP.get(item.ingredientId);
+  if (!ing || ing.category === 'garnish' || ing.category === 'ice') {
+    return { label: '装饰/可选', isEssential: false };
+  }
+  if (ing.category === 'spirit' || ing.category === 'liqueur') {
+    return { label: '必需基酒', isEssential: true };
+  }
+  return { label: '必需配液', isEssential: true };
+}
+
+const isReadyToMake = computed(() => {
+  if (!recipe.value) return false;
+  return recipe.value.ingredients.every(item => {
+    const role = getItemRoleBadge(item);
+    if (!role.isEssential) return true;
+    return isItemOwned(item.ingredientId);
+  });
 });
 
 function getIngredientName(id: string): string {
@@ -656,6 +685,41 @@ function startCrafting() {
   padding: 2rpx 10rpx;
   border-radius: 6rpx;
   font-weight: 500;
+}
+
+.status-tag-essential {
+  font-size: 18rpx;
+  color: #38BDF8;
+  background: rgba(56, 189, 248, 0.15);
+  padding: 2rpx 10rpx;
+  border-radius: 6rpx;
+  font-weight: 500;
+}
+
+.status-tag-optional {
+  font-size: 18rpx;
+  color: #9CA3AF;
+  background: rgba(156, 163, 175, 0.15);
+  padding: 2rpx 10rpx;
+  border-radius: 6rpx;
+  font-weight: 500;
+}
+
+.ing-header-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6rpx;
+}
+
+.ready-badge-pill {
+  font-size: 20rpx;
+  color: #10B981;
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  padding: 4rpx 14rpx;
+  border-radius: 999rpx;
+  font-weight: 600;
 }
 
 .status-tag-sub {

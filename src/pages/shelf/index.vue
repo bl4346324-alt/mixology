@@ -180,7 +180,8 @@ const categoryMeta: { key: IngredientCategory; title: string }[] = [
   { key: 'juice', title: '果汁与鲜果 (Juices)' },
   { key: 'syrup', title: '糖浆与甜味剂 (Syrups)' },
   { key: 'bitters', title: '苦精与调味 (Bitters)' },
-  { key: 'garnish', title: '装饰与冰块 (Garnish)' },
+  { key: 'garnish', title: '装饰与辅料 (Garnish)' },
+  { key: 'ice', title: '冰块与老冰 (Ice)' },
 ];
 
 const ingredientGroups = computed(() => {

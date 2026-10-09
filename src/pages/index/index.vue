@@ -86,6 +86,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { RECIPES } from '../../data/recipes';
+import { INGREDIENTS_MAP } from '../../data/ingredients';
 import type { RecipeCategory } from '../../types/recipe';
 import RecipeCard from '../../components/RecipeCard.vue';
 import { useCabinetStore } from '../../stores/cabinet';
@@ -132,14 +133,18 @@ const filteredRecipes = computed(() => {
     list = list.filter(r => r.category === currentCategory.value);
   }
 
-  // 2. 搜索词筛选 (酒名中文、英文、标签、描述)
+  // 2. 搜索词筛选 (酒名中文、英文、标签、描述、原料名称)
   if (searchQuery.value.trim()) {
     const q = searchQuery.value.trim().toLowerCase();
     list = list.filter(r => 
       r.nameZh.toLowerCase().includes(q) ||
       r.nameEn.toLowerCase().includes(q) ||
       r.tags.some(t => t.toLowerCase().includes(q)) ||
-      r.description.toLowerCase().includes(q)
+      r.description.toLowerCase().includes(q) ||
+      r.ingredients.some(ing => {
+        const target = INGREDIENTS_MAP.get(ing.ingredientId);
+        return target && (target.nameZh.toLowerCase().includes(q) || target.nameEn.toLowerCase().includes(q));
+      })
     );
   }
 
