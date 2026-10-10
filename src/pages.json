@@ -57,7 +57,7 @@
     {
       "path": "pages/recipe/poster",
       "style": {
-        "navigationBarTitleText": "微醺海报卡片",
+        "navigationBarTitleText": "天天调饮记 · 拍立得海报",
         "navigationBarBackgroundColor": "#0E0F14",
         "navigationBarTextStyle": "white",
         "backgroundColor": "#0E0F14"

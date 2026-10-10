@@ -103,9 +103,16 @@
 
       <!-- 动作 6: 完成享用 -->
       <view v-else class="finish-board glass-card">
-        <text class="finish-icon">🥂</text>
+        <view class="finish-illus-wrap">
+          <image
+            class="finish-cocktail-img"
+            :src="craftImageSrc"
+            mode="aspectFit"
+            @error="handleCraftImageError"
+          />
+        </view>
         <text class="finish-title">完成调制！即可享用</text>
-        <text class="finish-desc">杯型：{{ recipe.glass }} · 预计酒精度：{{ recipe.calculatedAbv }}%</text>
+        <text class="finish-desc">杯型：{{ glassName }} · 预计酒精度：{{ recipe.calculatedAbv }}% ABV</text>
         <text v-if="recipe.bartenderNote" class="finish-note">“{{ recipe.bartenderNote }}”</text>
       </view>
 
@@ -169,8 +176,9 @@
         />
 
         <view class="modal-actions">
-          <button class="btn-subtle" @tap="closeModal">跳过</button>
-          <button class="btn-gold" @tap="saveLog">保存手记</button>
+          <button class="btn-subtle" @tap="closeModal">稍后打卡</button>
+          <button class="btn-subtle save-btn" @tap="saveLogOnly">仅存手记</button>
+          <button class="btn-gold poster-btn" @tap="saveAndGoPoster">📸 生成海报</button>
         </view>
       </view>
     </view>
@@ -356,12 +364,39 @@ function finishCocktail() {
   showLogModal.value = true;
 }
 
+const isImageError = ref(false);
+
+function handleCraftImageError() {
+  isImageError.value = true;
+}
+
+const craftImageSrc = computed(() => {
+  if (!recipe.value) return '/static/recipes/long_island_iced_tea.png';
+  if (isImageError.value) return '/static/recipes/long_island_iced_tea.png';
+  if (recipe.value.coverImage && recipe.value.coverImage.trim()) {
+    return recipe.value.coverImage;
+  }
+  return `/static/recipes/${recipe.value.id}.png`;
+});
+
+const glassName = computed(() => {
+  if (!recipe.value) return '专用杯';
+  switch (recipe.value.glass) {
+    case 'martini': return '马天尼高脚杯';
+    case 'highball': return '高球长饮杯';
+    case 'old_fashioned': return '古典矮杯';
+    case 'coupe': return '浅碟香槟杯';
+    case 'mule_mug': return '莫斯科铜骡杯';
+    default: return '专用杯';
+  }
+});
+
 function closeModal() {
   showLogModal.value = false;
   uni.navigateBack();
 }
 
-function saveLog() {
+function saveLogOnly() {
   if (recipe.value) {
     favoritesStore.addTastingLog({
       recipeId: recipe.value.id,
@@ -374,8 +409,27 @@ function saveLog() {
       icon: 'success'
     });
     setTimeout(() => {
-      closeModal();
-    }, 800);
+      showLogModal.value = false;
+      uni.navigateBack();
+    }, 600);
+  }
+}
+
+function saveAndGoPoster() {
+  if (recipe.value) {
+    favoritesStore.addTastingLog({
+      recipeId: recipe.value.id,
+      recipeName: recipe.value.nameZh,
+      rating: logRating.value,
+      notes: logNotes.value,
+    });
+    const curId = recipe.value.id;
+    const rating = logRating.value;
+    const notes = encodeURIComponent(logNotes.value);
+    showLogModal.value = false;
+    uni.navigateTo({
+      url: `/pages/recipe/poster?id=${curId}&rating=${rating}&notes=${notes}`
+    });
   }
 }
 
@@ -623,6 +677,21 @@ function goBack() {
   margin-bottom: 20rpx;
 }
 
+.finish-illus-wrap {
+  width: 100%;
+  height: 320rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 24rpx;
+}
+
+.finish-cocktail-img {
+  width: 260rpx;
+  height: 320rpx;
+  display: block;
+}
+
 .finish-title {
   font-size: 40rpx;
   font-weight: 800;
@@ -761,7 +830,17 @@ function goBack() {
 
 .modal-actions {
   display: flex;
-  gap: 20rpx;
+  gap: 12rpx;
+
+  button {
+    flex: 1;
+    font-size: 22rpx;
+    padding: 18rpx 0;
+  }
+
+  .poster-btn {
+    flex: 1.3;
+  }
 }
 
 .stage-icon-wrap {
