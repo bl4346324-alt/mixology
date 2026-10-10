@@ -39,9 +39,9 @@
     {
       "path": "pages/recipe/detail",
       "style": {
-        "navigationBarTitleText": "酒谱详情",
-        "navigationBarBackgroundColor": "#0E0F14",
-        "navigationBarTextStyle": "white",
+        "navigationBarTitleText": "杯间 · 调饮手册",
+        "navigationBarBackgroundColor": "#FAF7F2",
+        "navigationBarTextStyle": "black",
         "backgroundColor": "#0E0F14"
       }
     },

@@ -1,14 +1,24 @@
 <template>
   <view class="container">
-    <!-- 顶部品牌栏 -->
+    <!-- 顶部品牌栏与视图模式切换 -->
     <view class="header-section">
       <view class="brand-wrap">
-        <text class="brand-title">微醺工坊</text>
-        <text class="brand-subtitle">MIXOCRAFT · 在家调一杯好酒</text>
+        <text class="volume-tag">VOLUME 01 · 饮品手册</text>
+        <text class="brand-title">今晚，喝哪杯？</text>
       </view>
-      <view class="quick-status" @tap="goToShelf">
-        <text class="status-num">{{ canMakeCount }}</text>
-        <text class="status-label">款可做</text>
+
+      <view class="header-right-actions">
+        <!-- 视图切换胶囊 -->
+        <view class="view-switch-pill" @tap="toggleViewMode">
+          <text class="switch-icon">{{ viewMode === 'deck' ? '🗂️' : '📋' }}</text>
+          <text class="switch-text">{{ viewMode === 'deck' ? '手册卡包' : '速查清单' }}</text>
+        </view>
+
+        <!-- 酒柜就绪计数快捷入口 -->
+        <view class="quick-status" @tap="goToShelf">
+          <text class="status-num">{{ canMakeCount }}</text>
+          <text class="status-label">可做</text>
+        </view>
       </view>
     </view>
 
@@ -40,45 +50,56 @@
       </view>
     </scroll-view>
 
-    <!-- 今日特调高光推荐 (当无搜索关键词时显示) -->
-    <view v-if="!searchQuery && featuredRecipe" class="featured-banner glass-card-amber" @tap="goToRecipe(featuredRecipe.id)">
-      <view class="featured-tag">今日特调推荐</view>
-      <view class="featured-content">
-        <view class="featured-left">
-          <text class="featured-title">{{ featuredRecipe.nameZh }}</text>
-          <text class="featured-subtitle">{{ featuredRecipe.nameEn }} · {{ featuredRecipe.calculatedAbv }}% ABV</text>
-          <text class="featured-desc">{{ featuredRecipe.description }}</text>
-          <view class="featured-btn">
-            <text>立即调一杯 →</text>
+    <!-- 模式 1: 抖音同款《杯间·饮品手册》层叠卡片抽卡模式 (Deck Mode) -->
+    <view v-if="viewMode === 'deck'" class="deck-view-wrapper">
+      <RecipeCardDeck
+        :recipes="filteredRecipes"
+        @select="onDeckSelect"
+      />
+    </view>
+
+    <!-- 模式 2: 传统速查列表模式 (List Mode) -->
+    <view v-else class="list-view-wrapper">
+      <!-- 今日特调高光推荐 (当无搜索关键词时显示) -->
+      <view v-if="!searchQuery && featuredRecipe" class="featured-banner glass-card-amber" @tap="goToRecipe(featuredRecipe.id)">
+        <view class="featured-tag">今日特调推荐</view>
+        <view class="featured-content">
+          <view class="featured-left">
+            <text class="featured-title">{{ featuredRecipe.nameZh }}</text>
+            <text class="featured-subtitle">{{ featuredRecipe.nameEn }} · {{ featuredRecipe.calculatedAbv }}% ABV</text>
+            <text class="featured-desc">{{ featuredRecipe.description }}</text>
+            <view class="featured-btn">
+              <text>立即调一杯 →</text>
+            </view>
+          </view>
+          <view class="featured-right">
+            <text class="featured-glass">🍹</text>
           </view>
         </view>
-        <view class="featured-right">
-          <text class="featured-glass">🍹</text>
+      </view>
+
+      <!-- 酒谱列表栏头 -->
+      <view class="section-title-row">
+        <text class="section-title">精选酒谱 ({{ filteredRecipes.length }})</text>
+        <!-- 快速排序/筛选 -->
+        <view class="sort-selector" @tap="toggleSort">
+          <text class="sort-text">{{ sortLabel }} ⇅</text>
         </view>
       </view>
-    </view>
 
-    <!-- 酒谱列表栏头 -->
-    <view class="section-title-row">
-      <text class="section-title">精选酒谱 ({{ filteredRecipes.length }})</text>
-      <!-- 快速排序/筛选 -->
-      <view class="sort-selector" @tap="toggleSort">
-        <text class="sort-text">{{ sortLabel }} ⇅</text>
+      <!-- 配方列表 -->
+      <view class="recipe-list">
+        <view v-if="filteredRecipes.length === 0" class="empty-state">
+          <text class="empty-icon">🍸</text>
+          <text class="empty-text">未找到相关酒谱，试试其他关键词或分类吧</text>
+        </view>
+
+        <RecipeCard
+          v-for="recipe in filteredRecipes"
+          :key="recipe.id"
+          :recipe="recipe"
+        />
       </view>
-    </view>
-
-    <!-- 配方列表 -->
-    <view class="recipe-list">
-      <view v-if="filteredRecipes.length === 0" class="empty-state">
-        <text class="empty-icon">🍸</text>
-        <text class="empty-text">未找到相关酒谱，试试其他关键词或分类吧</text>
-      </view>
-
-      <RecipeCard
-        v-for="recipe in filteredRecipes"
-        :key="recipe.id"
-        :recipe="recipe"
-      />
     </view>
   </view>
 </template>
@@ -87,11 +108,27 @@
 import { ref, computed } from 'vue';
 import { RECIPES } from '../../data/recipes';
 import { INGREDIENTS_MAP } from '../../data/ingredients';
-import type { RecipeCategory } from '../../types/recipe';
+import type { Recipe, RecipeCategory } from '../../types/recipe';
 import RecipeCard from '../../components/RecipeCard.vue';
+import RecipeCardDeck from '../../components/RecipeCardDeck.vue';
 import { useCabinetStore } from '../../stores/cabinet';
 
 const cabinetStore = useCabinetStore();
+
+// 视图模式：'deck' (手册卡盒模式，默认) | 'list' (速查列表模式)
+const viewMode = ref<'deck' | 'list'>('deck');
+
+function toggleViewMode() {
+  viewMode.value = viewMode.value === 'deck' ? 'list' : 'deck';
+  try {
+    uni.vibrateShort({ type: 'light' });
+  } catch (_) {}
+}
+
+function onDeckSelect(recipe: Recipe) {
+  // 卡片抽取回调
+  console.log('Selected card:', recipe.nameZh);
+}
 
 const searchQuery = ref('');
 const currentCategory = ref<string>('all');
@@ -182,7 +219,7 @@ function goToRecipe(id: string) {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 28rpx;
+  margin-bottom: 24rpx;
 }
 
 .brand-wrap {
@@ -190,9 +227,18 @@ function goToRecipe(id: string) {
   flex-direction: column;
 }
 
+.volume-tag {
+  font-size: 19rpx;
+  font-weight: 700;
+  color: #F59E0B;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  margin-bottom: 4rpx;
+}
+
 .brand-title {
-  font-size: 44rpx;
-  font-weight: 800;
+  font-size: 42rpx;
+  font-weight: 900;
   color: #FFFFFF;
   letter-spacing: 1px;
 }
@@ -204,14 +250,52 @@ function goToRecipe(id: string) {
   margin-top: 4rpx;
 }
 
+.header-right-actions {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.view-switch-pill {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 10rpx 20rpx;
+  border-radius: 999rpx;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.view-switch-pill:active {
+  transform: scale(0.95);
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.switch-icon {
+  font-size: 22rpx;
+}
+
+.switch-text {
+  font-size: 21rpx;
+  color: #FDE68A;
+  font-weight: 600;
+}
+
 .quick-status {
   display: flex;
   align-items: baseline;
   gap: 6rpx;
   background: rgba(16, 185, 129, 0.15);
   border: 1px solid rgba(16, 185, 129, 0.3);
-  padding: 10rpx 20rpx;
+  padding: 10rpx 18rpx;
   border-radius: 999rpx;
+}
+
+.deck-view-wrapper {
+  margin-top: 10rpx;
+  width: 100%;
 }
 
 .status-num {

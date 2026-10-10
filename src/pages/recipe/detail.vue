@@ -1,26 +1,101 @@
 <template>
   <view v-if="recipe" class="container">
-    <!-- 顶部横幅与返回 -->
-    <view class="hero-banner" :style="{ background: recipe.coverColor }">
-      <view class="hero-content">
-        <text class="hero-glass">{{ glassEmoji }}</text>
-        <view class="hero-titles">
-          <text class="name-zh">{{ recipe.nameZh }}</text>
-          <text class="name-en">{{ recipe.nameEn }}</text>
+    <!-- 顶部展开手册卡片 (Opened Recipe Journal Card) -->
+    <view class="detail-journal-card" :style="{ '--theme-color': recipe.coverColor || '#D97706' }">
+      <!-- 活页抽卡收回栏 -->
+      <view class="retract-tab-bar">
+        <view class="retract-tab" @tap="retractCard">
+          <text class="retract-arrow">‹</text>
+          <text class="retract-text">收回卡片</text>
         </view>
-        <view class="hero-tags">
-          <text class="badge-abv">{{ displayAbv }}% ABV</text>
-          <text class="badge-method">{{ methodName }}</text>
-          <text class="badge-glass">{{ glassName }}</text>
+        <view class="card-category-pill">
+          <text class="cat-num">{{ recipeIndexStr }}</text>
+          <text class="cat-slash">/</text>
+          <text class="cat-name">{{ getCategoryName(recipe.category) }}</text>
+        </view>
+      </view>
+
+      <!-- 居中高清手绘插画 (与首页卡包完全对齐) -->
+      <view class="detail-illustration-wrap">
+        <image
+          class="detail-cocktail-img"
+          :src="detailImageSrc"
+          mode="aspectFit"
+          @error="handleDetailImageError"
+        />
+      </view>
+
+      <!-- 优雅衬线双语标题与微醺短语 -->
+      <view class="detail-title-block">
+        <text class="detail-name-en">{{ recipe.nameEn }}</text>
+        <text class="detail-name-zh">{{ recipe.nameZh }}</text>
+        <text class="detail-quote">“{{ recipe.description }}”</text>
+
+        <!-- 核心属性胶囊 -->
+        <view class="detail-pills-row">
+          <view class="detail-pill pill-abv">
+            <text>{{ displayAbv }}% ABV</text>
+          </view>
+          <view class="detail-pill pill-method">
+            <text>{{ methodName }}</text>
+          </view>
+          <view class="detail-pill pill-glass">
+            <text>{{ glassName }}</text>
+          </view>
+          <view v-if="cabinetEval" class="detail-pill" :class="cabinetEvalClass">
+            <text>{{ cabinetEvalText }}</text>
+          </view>
         </view>
       </view>
     </view>
 
     <!-- 主体区域 -->
     <view class="content-body">
-      <!-- 简介与起源故事 -->
-      <view class="story-card glass-card">
-        <text class="story-desc">{{ recipe.description }}</text>
+      <!-- 抖音同款黄金比例条 (Parts Ratio Card) -->
+      <view v-if="ratioSegments.length > 0" class="ratio-card glass-card">
+        <view class="ratio-header">
+          <view class="ratio-title-wrap">
+            <text class="ratio-icon">⚖️</text>
+            <text class="ratio-title">黄金调饮比例</text>
+            <text class="ratio-subtitle">PARTS RATIO</text>
+          </view>
+          <text class="ratio-total">总液量 {{ formatIngredientVolume(totalLiquidVolume) }}</text>
+        </view>
+
+        <!-- 彩色分层长条 -->
+        <view class="ratio-bar-track">
+          <view
+            v-for="seg in ratioSegments"
+            :key="seg.id"
+            class="ratio-bar-segment"
+            :style="{ width: seg.percent + '%', backgroundColor: seg.color }"
+          >
+            <text v-if="seg.percent >= 12" class="seg-name">{{ seg.shortName }}</text>
+            <text v-if="seg.percent >= 12" class="seg-part">{{ seg.partStr }}份</text>
+          </view>
+        </view>
+
+        <!-- 比例图例与份额徽章 -->
+        <view class="ratio-legend-list">
+          <view
+            v-for="seg in ratioSegments"
+            :key="seg.id"
+            class="legend-item"
+          >
+            <view class="legend-color-dot" :style="{ backgroundColor: seg.color }"></view>
+            <text class="legend-name">{{ seg.shortName }}</text>
+            <text class="legend-part-badge">{{ seg.partStr }} 份</text>
+            <text class="legend-ml">({{ formatIngredientVolume(seg.amountMl) }})</text>
+          </view>
+        </view>
+      </view>
+
+      <!-- 起源故事与微醺背景 -->
+      <view v-if="recipe.story" class="story-card glass-card">
+        <view class="story-header">
+          <text class="story-icon">📖</text>
+          <text class="story-title">起源与品饮风味</text>
+        </view>
         <text class="story-text">“{{ recipe.story }}”</text>
       </view>
 
@@ -161,7 +236,7 @@
             :key="step.step"
             class="step-item"
           >
-            <view class="step-badge">{{ step.step }}</view>
+            <view class="step-badge">{{ String(step.step).padStart(2, '0') }}</view>
             <view class="step-content">
               <text class="step-title">{{ step.title }}</text>
               <text class="step-desc">{{ step.description }}</text>
@@ -210,7 +285,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
-import { RECIPES_MAP } from '../../data/recipes';
+import { RECIPES, RECIPES_MAP } from '../../data/recipes';
 import { INGREDIENTS_MAP } from '../../data/ingredients';
 import type { Recipe } from '../../types/recipe';
 import { useCabinetStore } from '../../stores/cabinet';
@@ -227,6 +302,166 @@ const recipeId = ref('');
 const portions = ref(1);
 const customStates = ref<Record<string, CustomizedIngredientState>>({});
 const customRecipe = ref<Recipe | null>(null);
+const isImageError = ref(false);
+
+function handleDetailImageError() {
+  isImageError.value = true;
+}
+
+const detailImageSrc = computed(() => {
+  if (!recipe.value) return '/static/recipes/long_island_iced_tea.png';
+  if (isImageError.value) return '/static/recipes/long_island_iced_tea.png';
+  if (recipe.value.coverImage && recipe.value.coverImage.trim()) {
+    return recipe.value.coverImage;
+  }
+  return `/static/recipes/${recipe.value.id}.png`;
+});
+
+const recipeIndexStr = computed(() => {
+  if (!recipe.value) return '01';
+  const idx = RECIPES.findIndex(r => r.id === recipe.value?.id);
+  if (idx >= 0) {
+    return String(idx + 1).padStart(2, '0');
+  }
+  return '01';
+});
+
+function retractCard() {
+  try {
+    uni.vibrateShort({ type: 'light' });
+  } catch (e) {}
+  uni.navigateBack({
+    fail: () => {
+      uni.switchTab({ url: '/pages/index/index' });
+    }
+  });
+}
+
+function getCategoryName(cat?: string): string {
+  switch (cat) {
+    case 'iba': return 'IBA 官方经典';
+    case 'convenience': return '便利店特调';
+    case 'tea_cocktail': return '新中式茶酒';
+    case 'mocktail': return '无酒精特调';
+    default: return '精选调饮';
+  }
+}
+
+const cabinetEval = computed(() => {
+  if (!recipe.value) return null;
+  return cabinetStore.evaluateRecipe(recipe.value);
+});
+
+const cabinetEvalText = computed(() => {
+  if (!cabinetEval.value) return '';
+  if (cabinetEval.value.status === 'perfect') return '✨ 现成可做';
+  if (cabinetEval.value.status === 'substitute') return '🔄 平替可做';
+  if (cabinetEval.value.status === 'missing_one') return '仅缺 1 样';
+  return '';
+});
+
+const cabinetEvalClass = computed(() => {
+  if (!cabinetEval.value) return '';
+  if (cabinetEval.value.status === 'perfect') return 'pill-ready';
+  if (cabinetEval.value.status === 'substitute') return 'pill-sub';
+  return 'pill-missing';
+});
+
+interface RatioSegment {
+  id: string;
+  name: string;
+  shortName: string;
+  amountMl: number;
+  percent: number;
+  partStr: string;
+  color: string;
+}
+
+const INGREDIENT_COLORS: Record<string, string> = {
+  gin: '#6EE7B7',
+  london_dry_gin: '#6EE7B7',
+  vodka: '#93C5FD',
+  white_rum: '#FDE68A',
+  dark_rum: '#D97706',
+  tequila: '#FBBF24',
+  bourbon_whiskey: '#EA580C',
+  rye_whiskey: '#C2410C',
+  scotch_whiskey: '#B45309',
+  whiskey: '#B45309',
+  cognac: '#9A3412',
+  brandy: '#9A3412',
+  cointreau: '#F97316',
+  triple_sec: '#FB923C',
+  kahlua: '#78350F',
+  baileys: '#F59E0B',
+  campari: '#EF4444',
+  aperol: '#F97316',
+  sweet_vermouth: '#DC2626',
+  dry_vermouth: '#A3E635',
+  lemon_juice: '#FACC15',
+  lime_juice: '#84CC16',
+  orange_juice: '#FB923C',
+  grapefruit_juice: '#F43F5E',
+  pineapple_juice: '#FDE047',
+  cranberry_juice: '#E11D48',
+  simple_syrup: '#E2E8F0',
+  honey: '#F59E0B',
+  grenadine: '#E11D48',
+  soda_water: '#BAE6FD',
+  tonic_water: '#7DD3FC',
+  cola: '#78350F',
+  ginger_beer: '#FDE68A',
+  ginger_ale: '#FDE68A',
+  iced_tea: '#B45309',
+  green_tea: '#86EFAC',
+  oolong_tea: '#B45309',
+  jasmine_tea: '#A7F3D0',
+  redbull: '#3B82F6',
+  yakult: '#FECDD3',
+  coconut_milk: '#F1F5F9',
+  angostura_bitters: '#991B1B',
+};
+
+const defaultColorPalette = [
+  '#F59E0B', '#3B82F6', '#10B981', '#EC4899', '#8B5CF6', '#14B8A6', '#F97316', '#6366F1'
+];
+
+const totalLiquidVolume = computed(() => {
+  if (!recipe.value) return 0;
+  return recipe.value.ingredients.reduce((acc, cur) => acc + (cur.amountMl || 0), 0);
+});
+
+const ratioSegments = computed<RatioSegment[]>(() => {
+  if (!recipe.value) return [];
+  const liquids = recipe.value.ingredients.filter(item => item.amountMl && item.amountMl > 0);
+  if (liquids.length === 0) return [];
+
+  const totalMl = liquids.reduce((acc, cur) => acc + cur.amountMl, 0);
+  if (totalMl <= 0) return [];
+
+  const minMl = Math.min(...liquids.map(l => l.amountMl));
+  const baseUnit = minMl > 0 ? minMl : 15;
+
+  return liquids.map((item, idx) => {
+    const activeId = getActiveIngredientId(item.ingredientId);
+    const fullName = getIngredientName(activeId);
+    const shortName = fullName.split('/')[0].trim().slice(0, 5);
+    const percent = Math.round((item.amountMl / totalMl) * 100);
+    const rawPart = +(item.amountMl / baseUnit).toFixed(1);
+    const partStr = Number.isInteger(rawPart) ? `${rawPart}` : `${rawPart}`;
+    const color = INGREDIENT_COLORS[activeId] || INGREDIENT_COLORS[item.ingredientId] || defaultColorPalette[idx % defaultColorPalette.length];
+
+    return {
+      id: item.ingredientId,
+      name: fullName,
+      shortName,
+      amountMl: item.amountMl,
+      percent,
+      partStr,
+      color,
+    };
+  });
+});
 
 onLoad((query) => {
   if (query && query.id) {
@@ -461,56 +696,173 @@ function startCrafting() {
   min-height: 100vh;
 }
 
-.hero-banner {
-  padding: 60rpx 30rpx 40rpx 30rpx;
-  border-bottom-left-radius: 40rpx;
-  border-bottom-right-radius: 40rpx;
+/* 展开手册纸质卡片 (Opened Recipe Journal Card) */
+.detail-journal-card {
+  background: #FAF7F2;
+  border-bottom-left-radius: 44rpx;
+  border-bottom-right-radius: 44rpx;
+  padding: 30rpx 36rpx 44rpx 36rpx;
+  box-shadow: 0 16rpx 40rpx rgba(0, 0, 0, 0.45);
+  position: relative;
+  border: 1px solid rgba(0, 0, 0, 0.05);
 }
 
-.hero-content {
+.retract-tab-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20rpx;
+}
+
+.retract-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8rpx;
+  background: #111827;
+  color: #FAF7F2;
+  padding: 10rpx 24rpx;
+  border-radius: 999rpx;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+  box-shadow: 0 4rpx 12rpx rgba(17, 24, 39, 0.2);
+
+  &:active {
+    transform: scale(0.95);
+  }
+}
+
+.retract-arrow {
+  font-size: 28rpx;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.retract-text {
+  font-size: 22rpx;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.card-category-pill {
+  display: flex;
+  align-items: baseline;
+  gap: 6rpx;
+  background: rgba(0, 0, 0, 0.04);
+  padding: 8rpx 18rpx;
+  border-radius: 999rpx;
+}
+
+.cat-num {
+  font-size: 26rpx;
+  font-weight: 800;
+  color: #111827;
+}
+
+.cat-slash {
+  font-size: 20rpx;
+  color: #9CA3AF;
+}
+
+.cat-name {
+  font-size: 20rpx;
+  font-weight: 600;
+  color: #6B7280;
+}
+
+/* 居中手绘插画 */
+.detail-illustration-wrap {
+  width: 100%;
+  height: 380rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 10rpx 0 20rpx 0;
+}
+
+.detail-cocktail-img {
+  width: 320rpx;
+  height: 380rpx;
+  display: block;
+}
+
+/* 优雅双语标题与短语 */
+.detail-title-block {
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
 }
 
-.hero-glass {
-  font-size: 80rpx;
-  margin-bottom: 16rpx;
+.detail-name-en {
+  font-size: 26rpx;
+  font-style: italic;
+  font-family: 'Baskerville', 'Georgia', 'Times New Roman', serif;
+  color: #4B5563;
+  letter-spacing: 0.5px;
 }
 
-.name-zh {
-  font-size: 46rpx;
-  font-weight: 800;
-  color: #FFFFFF;
-  display: block;
-}
-
-.name-en {
-  font-size: 24rpx;
-  color: rgba(255, 255, 255, 0.7);
+.detail-name-zh {
+  font-size: 50rpx;
+  font-weight: 900;
+  color: #111827;
+  letter-spacing: 2rpx;
+  line-height: 1.2;
   margin-top: 6rpx;
-  display: block;
+  font-family: -apple-system, 'PingFang SC', sans-serif;
 }
 
-.hero-tags {
+.detail-quote {
+  font-size: 23rpx;
+  color: #6B7280;
+  line-height: 1.5;
+  margin-top: 14rpx;
+  max-width: 90%;
+}
+
+.detail-pills-row {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 12rpx;
-  margin-top: 24rpx;
+  margin-top: 22rpx;
 }
 
-.badge-abv, .badge-method, .badge-glass {
-  background: rgba(0, 0, 0, 0.35);
-  backdrop-filter: blur(8px);
-  color: #FFFFFF;
-  font-size: 22rpx;
+.detail-pill {
+  font-size: 20rpx;
   font-weight: 600;
-  padding: 6rpx 20rpx;
+  padding: 6rpx 18rpx;
   border-radius: 999rpx;
 }
 
-.badge-abv {
-  color: #FDE68A;
+.pill-abv {
+  background: #FEF3C7;
+  color: #92400E;
+  border: 1px solid #FDE68A;
+}
+
+.pill-method {
+  background: #E5E7EB;
+  color: #374151;
+}
+
+.pill-glass {
+  background: #F3F4F6;
+  color: #4B5563;
+}
+
+.pill-ready {
+  background: #D1FAE5;
+  color: #065F46;
+}
+
+.pill-sub {
+  background: #FEF3C7;
+  color: #B45309;
+}
+
+.pill-missing {
+  background: #FEE2E2;
+  color: #991B1B;
 }
 
 .content-body {
@@ -520,16 +872,143 @@ function startCrafting() {
   gap: 24rpx;
 }
 
+/* 黄金比例配方条卡片 (Parts Ratio Card) */
+.ratio-card {
+  padding: 28rpx;
+}
+
+.ratio-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 22rpx;
+}
+
+.ratio-title-wrap {
+  display: flex;
+  align-items: baseline;
+  gap: 10rpx;
+}
+
+.ratio-icon {
+  font-size: 26rpx;
+}
+
+.ratio-title {
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #FFFFFF;
+}
+
+.ratio-subtitle {
+  font-size: 18rpx;
+  font-weight: 600;
+  color: #F59E0B;
+  letter-spacing: 1px;
+}
+
+.ratio-total {
+  font-size: 22rpx;
+  color: #9CA3AF;
+}
+
+.ratio-bar-track {
+  width: 100%;
+  height: 52rpx;
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 14rpx;
+  overflow: hidden;
+  display: flex;
+  box-shadow: inset 0 2rpx 6rpx rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.ratio-bar-segment {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-right: 1px solid rgba(0, 0, 0, 0.15);
+  transition: width 0.3s ease;
+  overflow: hidden;
+}
+
+.seg-name {
+  font-size: 18rpx;
+  font-weight: 700;
+  color: #111827;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.seg-part {
+  font-size: 16rpx;
+  font-weight: 800;
+  color: rgba(17, 24, 39, 0.75);
+  line-height: 1;
+}
+
+.ratio-legend-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14rpx 20rpx;
+  margin-top: 22rpx;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 6rpx 14rpx;
+  border-radius: 8rpx;
+}
+
+.legend-color-dot {
+  width: 16rpx;
+  height: 16rpx;
+  border-radius: 4rpx;
+  flex-shrink: 0;
+}
+
+.legend-name {
+  font-size: 22rpx;
+  color: #E5E7EB;
+  font-weight: 500;
+}
+
+.legend-part-badge {
+  font-size: 19rpx;
+  font-weight: 700;
+  color: #FDE68A;
+}
+
+.legend-ml {
+  font-size: 19rpx;
+  color: #9CA3AF;
+}
+
+/* 起源故事卡片 */
 .story-card {
   padding: 28rpx;
 }
 
-.story-desc {
-  font-size: 26rpx;
-  color: #FFFFFF;
-  font-weight: 600;
-  display: block;
+.story-header {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
   margin-bottom: 12rpx;
+}
+
+.story-icon {
+  font-size: 26rpx;
+}
+
+.story-title {
+  font-size: 26rpx;
+  font-weight: 700;
+  color: #FFFFFF;
 }
 
 .story-text {
@@ -884,17 +1363,18 @@ function startCrafting() {
 }
 
 .step-badge {
-  width: 44rpx;
-  height: 44rpx;
-  border-radius: 50%;
-  background: rgba(245, 158, 11, 0.2);
+  width: 52rpx;
+  height: 52rpx;
+  border-radius: 14rpx;
+  background: rgba(245, 158, 11, 0.15);
   color: #FDE68A;
-  border: 1px solid rgba(245, 158, 11, 0.4);
+  border: 1px solid rgba(245, 158, 11, 0.35);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 22rpx;
+  font-size: 24rpx;
   font-weight: 800;
+  font-family: -apple-system, sans-serif;
   flex-shrink: 0;
 }
 
