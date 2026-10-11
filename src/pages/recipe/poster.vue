@@ -268,7 +268,7 @@ const ratioSegments = computed<RatioSegment[]>(() => {
   });
 });
 
-// 解析图片以适配 Canvas 绘制
+// 解析图片以适配 Canvas 绘制（增加超时熔断机制，杜绝任何卡死）
 interface ResolvedImage {
   path: string;
   width: number;
@@ -280,31 +280,46 @@ function resolveImageInfo(src: string): Promise<ResolvedImage> {
     if (!src) {
       return resolve({ path: '', width: 320, height: 420 });
     }
+    let isSettled = false;
+    const fallback = () => {
+      if (!isSettled) {
+        isSettled = true;
+        resolve({ path: src, width: 320, height: 420 });
+      }
+    };
+    // 300ms 超时熔断：若微信未能立即返回临时路径，立即回退直接绘制本地路径，绝不阻塞！
+    const timer = setTimeout(fallback, 300);
+
     uni.getImageInfo({
       src,
       success: (res) => {
-        resolve({
-          path: res.path || src,
-          width: res.width || 320,
-          height: res.height || 420,
-        });
+        if (!isSettled) {
+          isSettled = true;
+          clearTimeout(timer);
+          resolve({
+            path: res.path || src,
+            width: res.width || 320,
+            height: res.height || 420,
+          });
+        }
       },
       fail: (err) => {
-        console.warn('First getImageInfo failed for', src, err);
+        console.warn('First getImageInfo failed, trying relative format', err);
         const altSrc = src.startsWith('/') ? src.slice(1) : ('/' + src);
         uni.getImageInfo({
           src: altSrc,
           success: (res2) => {
-            resolve({
-              path: res2.path || altSrc,
-              width: res2.width || 320,
-              height: res2.height || 420,
-            });
+            if (!isSettled) {
+              isSettled = true;
+              clearTimeout(timer);
+              resolve({
+                path: res2.path || altSrc,
+                width: res2.width || 320,
+                height: res2.height || 420,
+              });
+            }
           },
-          fail: (err2) => {
-            console.warn('Fallback getImageInfo also failed:', altSrc, err2);
-            resolve({ path: src, width: 320, height: 420 });
-          }
+          fail: () => fallback()
         });
       }
     });
@@ -314,6 +329,11 @@ function resolveImageInfo(src: string): Promise<ResolvedImage> {
 // 保存海报逻辑
 async function savePoster() {
   uni.showLoading({ title: '正在绘制海报...', mask: true });
+
+  // 全局 3.5 秒终极安全保护，若发生任何异常必然解除 loading 遮罩
+  const safetyLoadingTimer = setTimeout(() => {
+    uni.hideLoading();
+  }, 3500);
 
   let imgInfo: ResolvedImage = { path: '', width: 320, height: 420 };
   try {
@@ -433,44 +453,60 @@ async function savePoster() {
   ctx.font = 'normal 16px sans-serif';
   ctx.fillText('完饮留念', w - 165, h - 62);
 
-  // 渲染并保存
+  // 双重保底导出逻辑
+  let hasTriggered = false;
+  const doSaveToAlbum = () => {
+    if (hasTriggered) return;
+    hasTriggered = true;
+    clearTimeout(safetyLoadingTimer);
+
+    uni.canvasToTempFilePath({
+      canvasId: 'exportCanvas',
+      destWidth: 1400,
+      destHeight: 2200,
+      success: (res) => {
+        uni.hideLoading();
+        uni.saveImageToPhotosAlbum({
+          filePath: res.tempFilePath,
+          success: () => {
+            uni.showToast({
+              title: '📸 海报已保存至相册！',
+              icon: 'success',
+              duration: 2000
+            });
+          },
+          fail: (err) => {
+            console.warn('saveImageToPhotosAlbum fail:', err);
+            uni.showToast({
+              title: '请在手机微信中长按保存',
+              icon: 'none'
+            });
+          }
+        });
+      },
+      fail: (err) => {
+        console.error('canvasToTempFilePath fail:', err);
+        uni.hideLoading();
+        uni.showToast({
+          title: '海报生成失败，请重试',
+          icon: 'none'
+        });
+      }
+    });
+  };
+
+  // 渲染并保存：尝试正常等待 draw 完成
   ctx.draw(false, () => {
-    setTimeout(() => {
-      uni.canvasToTempFilePath({
-        canvasId: 'exportCanvas',
-        destWidth: 1400,
-        destHeight: 2200,
-        success: (res) => {
-          uni.hideLoading();
-          uni.saveImageToPhotosAlbum({
-            filePath: res.tempFilePath,
-            success: () => {
-              uni.showToast({
-                title: '📸 海报已保存至相册！',
-                icon: 'success',
-                duration: 2000
-              });
-            },
-            fail: (err) => {
-              console.warn('saveImageToPhotosAlbum fail:', err);
-              uni.showToast({
-                title: '请在手机微信中长按保存',
-                icon: 'none'
-              });
-            }
-          });
-        },
-        fail: (err) => {
-          console.error('canvasToTempFilePath fail:', err);
-          uni.hideLoading();
-          uni.showToast({
-            title: '海报生成失败，请重试',
-            icon: 'none'
-          });
-        }
-      });
-    }, 300);
+    setTimeout(doSaveToAlbum, 100);
   });
+
+  // 超时保底：500ms 后微信渲染若未响应 draw 回调，强制导出并关掉 loading，绝不卡死
+  setTimeout(() => {
+    if (!hasTriggered) {
+      console.warn('ctx.draw callback timed out, executing fallback export');
+      doSaveToAlbum();
+    }
+  }, 500);
 }
 
 function goBack() {
@@ -487,6 +523,8 @@ function goBack() {
   flex-direction: column;
   align-items: center;
   box-sizing: border-box;
+  position: relative;
+  z-index: 1;
 }
 
 .poster-wrap {
@@ -778,11 +816,15 @@ function goBack() {
   font-weight: 700;
 }
 
-/* 离屏隐藏 Canvas */
+/* 离屏 Canvas (置于可视区域内负层级，保证微信 Native 渲染管线正常触发 draw 刷新回调，绝不卡死) */
 .export-canvas {
   position: fixed;
-  left: -9999px;
+  top: 0;
+  left: 0;
   width: 700px;
   height: 1100px;
+  z-index: -999;
+  opacity: 0;
+  pointer-events: none;
 }
 </style>
