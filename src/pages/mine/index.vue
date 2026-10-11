@@ -136,8 +136,9 @@
               <view class="leaf-visual-right" @tap="goToDetail(log.recipeId)">
                 <image
                   class="leaf-cocktail-img"
-                  :src="getRecipeImage(log.recipeId)"
+                  :src="getRecipeImage(log.recipeId, log.id)"
                   mode="aspectFit"
+                  @error="handleImageError(log.id)"
                 />
               </view>
             </view>
@@ -231,7 +232,7 @@ import { ref, computed } from 'vue';
 import { useFavoritesStore, type TastingLog } from '../../stores/favorites';
 import { useCabinetStore } from '../../stores/cabinet';
 import { usePartyStore } from '../../stores/party';
-import { RECIPES, RECIPES_MAP } from '../../data/recipes';
+import { RECIPES, RECIPES_MAP, getRecipeById } from '../../data/recipes';
 import UnitSelector from '../../components/UnitSelector.vue';
 
 const favoritesStore = useFavoritesStore();
@@ -316,21 +317,38 @@ function showStampTip(stamp: StampBadge) {
   });
 }
 
+const imageErrorMap = ref<Record<string, boolean>>({});
+
+function handleImageError(logId: string) {
+  imageErrorMap.value[logId] = true;
+}
+
 function getRecipeAbv(id: string): number {
-  return RECIPES_MAP.get(id)?.calculatedAbv || 0;
+  return getRecipeById(id)?.calculatedAbv || 0;
 }
 
 function getRecipeEnName(id: string): string {
-  return RECIPES_MAP.get(id)?.nameEn || '';
+  return getRecipeById(id)?.nameEn || '';
 }
 
 function getRecipeDesc(id: string): string {
-  return RECIPES_MAP.get(id)?.description || '在杯中摇晃夜色，让微醺治愈疲惫。';
+  return getRecipeById(id)?.description || '在杯中摇晃夜色，让微醺治愈疲惫。';
 }
 
-function getRecipeImage(id: string): string {
-  const r = RECIPES_MAP.get(id);
-  if (r?.coverImage) return r.coverImage;
+function getRecipeImage(id: string, logId?: string): string {
+  if (logId && imageErrorMap.value[logId]) {
+    return '/static/recipes/suntory_oolong_highball.png';
+  }
+  const r = getRecipeById(id);
+  if (r?.coverImage && r.coverImage.trim()) {
+    return r.coverImage;
+  }
+  if (id === 'ai_custom_mocktail') {
+    return '/static/recipes/dongfang_shuye_highball.png';
+  }
+  if (id.startsWith('ai_') || id === 'ai_custom_special') {
+    return '/static/recipes/suntory_oolong_highball.png';
+  }
   return `/static/recipes/${id}.png`;
 }
 

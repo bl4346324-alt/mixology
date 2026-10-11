@@ -156,6 +156,11 @@ const posterImageSrc = computed(() => {
   if (recipe.value.coverImage && recipe.value.coverImage.trim()) {
     return recipe.value.coverImage;
   }
+  if (recipe.value.id.startsWith('ai_')) {
+    return recipe.value.category === 'mocktail'
+      ? '/static/recipes/dongfang_shuye_highball.png'
+      : '/static/recipes/suntory_oolong_highball.png';
+  }
   return `/static/recipes/${recipe.value.id}.png`;
 });
 
