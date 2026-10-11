@@ -243,6 +243,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
+import { onShow } from '@dcloudio/uni-app';
 import type { Recipe } from '../../types/recipe';
 import { INGREDIENTS_MAP } from '../../data/ingredients';
 import FlavorRadar from '../../components/FlavorRadar.vue';
@@ -276,6 +277,10 @@ const generatedResult = ref<Recipe | null>(null);
 const collectedDeck = ref<Recipe[]>([]);
 
 onMounted(() => {
+  loadCollectedDeck();
+});
+
+onShow(() => {
   loadCollectedDeck();
 });
 

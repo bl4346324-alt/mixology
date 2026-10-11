@@ -124,8 +124,20 @@ export function getRecipeById(id: string): Recipe | undefined {
   if (RECIPES_MAP.has(id)) {
     return RECIPES_MAP.get(id);
   }
-  // 检查是否有本地缓存的 AI 侍酒师特调
+  // 检查是否有本地私房卡盒或当前缓存的 AI 侍酒师特调
   try {
+    const deck = uni.getStorageSync('mixocraft_custom_deck');
+    if (Array.isArray(deck)) {
+      const found = deck.find((item: Recipe) => item.id === id);
+      if (found) {
+        if (!found.coverImage) {
+          found.coverImage = found.category === 'mocktail'
+            ? '/static/recipes/dongfang_shuye_highball.png'
+            : '/static/recipes/suntory_oolong_highball.png';
+        }
+        return found;
+      }
+    }
     const cached = uni.getStorageSync('mixocraft_custom_recipe');
     if (cached && (cached.id === id || id.startsWith('ai_'))) {
       if (!cached.coverImage) {

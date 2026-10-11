@@ -130,6 +130,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
+import { onShow } from '@dcloudio/uni-app';
 import { RECIPES, AI_CUSTOM_RECIPES } from '../../data/recipes';
 import { INGREDIENTS_MAP } from '../../data/ingredients';
 import type { Recipe, RecipeCategory } from '../../types/recipe';
@@ -279,6 +280,25 @@ const categories = [
   { id: 'mocktail', name: '无酒精' },
 ];
 
+const customDeckRecipes = ref<Recipe[]>([]);
+
+function loadCustomDeck() {
+  try {
+    const customDeck = uni.getStorageSync('mixocraft_custom_deck');
+    if (Array.isArray(customDeck)) {
+      customDeckRecipes.value = customDeck;
+    } else {
+      customDeckRecipes.value = [];
+    }
+  } catch (_) {
+    customDeckRecipes.value = [];
+  }
+}
+
+onShow(() => {
+  loadCustomDeck();
+});
+
 // 全局可用酒谱列表：基础库 + AI预设特调 + 用户在AI侍酒师收录的私房特调
 const allAvailableRecipes = computed<Recipe[]>(() => {
   const list = [...RECIPES];
@@ -287,16 +307,11 @@ const allAvailableRecipes = computed<Recipe[]>(() => {
       list.push(item);
     }
   }
-  try {
-    const customDeck = uni.getStorageSync('mixocraft_custom_deck');
-    if (Array.isArray(customDeck)) {
-      for (const item of customDeck) {
-        if (!list.some(r => r.id === item.id)) {
-          list.unshift(item); // 用户定制的私房特调置顶排列在卡盒最前
-        }
-      }
+  for (const item of customDeckRecipes.value) {
+    if (!list.some(r => r.id === item.id)) {
+      list.unshift(item); // 用户定制的私房特调置顶排列在卡盒最前
     }
-  } catch (_) {}
+  }
   return list;
 });
 

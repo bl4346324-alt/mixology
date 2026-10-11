@@ -102,7 +102,7 @@
 <script setup lang="ts">
 import { ref, computed, getCurrentInstance } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
-import { RECIPES, RECIPES_MAP } from '../../data/recipes';
+import { RECIPES, RECIPES_MAP, getRecipeById } from '../../data/recipes';
 import { INGREDIENTS_MAP } from '../../data/ingredients';
 import type { Recipe } from '../../types/recipe';
 
@@ -125,13 +125,13 @@ onLoad((query) => {
     userNotes.value = decodeURIComponent(query.notes);
   }
 
-  // 尝试读取 AI 侍酒定制或临时特调配方
+  // 尝试读取 AI 侍酒定制或私房卡盒特调配方
   if (!RECIPES_MAP.get(recipeId.value) || recipeId.value.startsWith('ai_')) {
     try {
-      const cached = uni.getStorageSync('mixocraft_custom_recipe');
-      if (cached && (cached.id === recipeId.value || recipeId.value.startsWith('ai_'))) {
-        customRecipe.value = cached;
-        recipeId.value = cached.id;
+      const resolved = getRecipeById(recipeId.value);
+      if (resolved) {
+        customRecipe.value = resolved;
+        recipeId.value = resolved.id;
       }
     } catch (e) {
       console.error('Failed to load custom recipe in poster', e);
@@ -143,7 +143,7 @@ const recipe = computed<Recipe | undefined>(() => {
   if (customRecipe.value && customRecipe.value.id === recipeId.value) {
     return customRecipe.value;
   }
-  return RECIPES_MAP.get(recipeId.value);
+  return getRecipeById(recipeId.value);
 });
 
 function handlePosterImageError() {
