@@ -90,9 +90,9 @@
       <button class="btn-gold action-btn primary-action" @tap="savePoster">📸 保存海报到相册</button>
     </view>
 
-    <!-- 离屏 Canvas 画布用于真实生成高清图片导出 -->
+    <!-- 离屏 Canvas 2D 画布用于真实生成高清图片导出 -->
     <canvas
-      canvas-id="exportCanvas"
+      type="2d"
       id="exportCanvas"
       class="export-canvas"
     />
@@ -100,11 +100,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, getCurrentInstance } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
 import { RECIPES, RECIPES_MAP } from '../../data/recipes';
 import { INGREDIENTS_MAP } from '../../data/ingredients';
 import type { Recipe } from '../../types/recipe';
+
+const instance = getCurrentInstance();
 
 const recipeId = ref('');
 const customRecipe = ref<Recipe | null>(null);
@@ -268,245 +270,216 @@ const ratioSegments = computed<RatioSegment[]>(() => {
   });
 });
 
-// 解析图片以适配 Canvas 绘制（增加超时熔断机制，杜绝任何卡死）
-interface ResolvedImage {
-  path: string;
-  width: number;
-  height: number;
-}
-
-function resolveImageInfo(src: string): Promise<ResolvedImage> {
-  return new Promise((resolve) => {
-    if (!src) {
-      return resolve({ path: '', width: 320, height: 420 });
-    }
-    let isSettled = false;
-    const fallback = () => {
-      if (!isSettled) {
-        isSettled = true;
-        resolve({ path: src, width: 320, height: 420 });
-      }
-    };
-    // 300ms 超时熔断：若微信未能立即返回临时路径，立即回退直接绘制本地路径，绝不阻塞！
-    const timer = setTimeout(fallback, 300);
-
-    uni.getImageInfo({
-      src,
-      success: (res) => {
-        if (!isSettled) {
-          isSettled = true;
-          clearTimeout(timer);
-          resolve({
-            path: res.path || src,
-            width: res.width || 320,
-            height: res.height || 420,
-          });
-        }
-      },
-      fail: (err) => {
-        console.warn('First getImageInfo failed, trying relative format', err);
-        const altSrc = src.startsWith('/') ? src.slice(1) : ('/' + src);
-        uni.getImageInfo({
-          src: altSrc,
-          success: (res2) => {
-            if (!isSettled) {
-              isSettled = true;
-              clearTimeout(timer);
-              resolve({
-                path: res2.path || altSrc,
-                width: res2.width || 320,
-                height: res2.height || 420,
-              });
-            }
-          },
-          fail: () => fallback()
-        });
-      }
-    });
-  });
-}
-
-// 保存海报逻辑
-async function savePoster() {
+// 保存海报逻辑（全面使用微信小程序现代 Canvas 2D 接口，杜绝旧版 Canvas 回调卡死及路径解析问题）
+function savePoster() {
   uni.showLoading({ title: '正在绘制海报...', mask: true });
 
-  // 全局 3.5 秒终极安全保护，若发生任何异常必然解除 loading 遮罩
-  const safetyLoadingTimer = setTimeout(() => {
-    uni.hideLoading();
-  }, 3500);
-
-  let imgInfo: ResolvedImage = { path: '', width: 320, height: 420 };
-  try {
-    imgInfo = await resolveImageInfo(posterImageSrc.value);
-  } catch (e) {
-    console.warn('Resolve image info error', e);
-  }
-
-  const ctx = uni.createCanvasContext('exportCanvas');
-  const w = 700;
-  const h = 1100;
-
-  // 1. 背景卡片
-  ctx.fillStyle = '#FAF7F2';
-  ctx.fillRect(0, 0, w, h);
-
-  // 2. 顶部主视觉内衬
-  ctx.fillStyle = '#F3EFEA';
-  ctx.fillRect(36, 36, w - 72, 430);
-
-  // 3. 绘制手绘鸡尾酒插画 (居中且保持宽高比)
-  if (imgInfo.path) {
-    const maxW = 280;
-    const maxH = 340;
-    let drawW = maxW;
-    let drawH = maxH;
-    if (imgInfo.width && imgInfo.height) {
-      const aspect = imgInfo.width / imgInfo.height;
-      if (aspect > maxW / maxH) {
-        drawW = maxW;
-        drawH = maxW / aspect;
-      } else {
-        drawH = maxH;
-        drawW = maxH * aspect;
-      }
-    }
-    drawW = Math.round(drawW);
-    drawH = Math.round(drawH);
-    const imgX = Math.round((w - drawW) / 2);
-    const imgY = Math.round(36 + (430 - drawH) / 2 + 15);
-    try {
-      ctx.drawImage(imgInfo.path, imgX, imgY, drawW, drawH);
-    } catch (err) {
-      console.error('Canvas drawImage error:', err);
-    }
-  }
-
-  // 4. 绘制文字信息
-  ctx.fillStyle = '#9CA3AF';
-  ctx.font = 'normal 22px sans-serif';
-  ctx.fillText(`VOLUME 01 · NO.${recipeIndexStr.value}`, 56, 76);
-
-  ctx.fillStyle = '#B45309';
-  ctx.font = 'bold 22px sans-serif';
-  ctx.fillText(`${recipe.value?.calculatedAbv}% ABV`, w - 170, 76);
-
-  // 5. 中文大字标题与英文
-  ctx.fillStyle = '#4B5563';
-  ctx.font = 'italic 26px Georgia, serif';
-  ctx.fillText(recipe.value?.nameEn || '', 56, 520);
-
-  ctx.fillStyle = '#111827';
-  ctx.font = 'bold 44px sans-serif';
-  ctx.fillText(recipe.value?.nameZh || '', 56, 580);
-
-  // 6. 金句语录
-  ctx.fillStyle = '#6B7280';
-  ctx.font = 'normal 22px sans-serif';
-  const quote = displayNotes.value.slice(0, 30);
-  ctx.fillText(`“${quote}”`, 56, 630);
-
-  // 7. 比例条
-  let startX = 56;
-  const barY = 665;
-  const barWidth = w - 112;
-  const barHeight = 24;
-  for (const seg of ratioSegments.value) {
-    const sw = (seg.percent / 100) * barWidth;
-    ctx.fillStyle = seg.color;
-    ctx.fillRect(startX, barY, sw, barHeight);
-    startX += sw;
-  }
-
-  // 8. 配方清单
-  ctx.fillStyle = '#9CA3AF';
-  ctx.font = 'bold 20px sans-serif';
-  ctx.fillText('RECIPE FORMULA', 56, 730);
-
-  let formY = 770;
-  if (recipe.value) {
-    for (const item of recipe.value.ingredients.slice(0, 5)) {
-      ctx.fillStyle = '#374151';
-      ctx.font = 'normal 22px sans-serif';
-      ctx.fillText(`• ${getIngredientName(item.ingredientId)}`, 56, formY);
-
-      ctx.fillStyle = '#B45309';
-      ctx.font = 'bold 22px sans-serif';
-      const vol = item.customUnit ? item.customUnit : `${item.amountMl} ml`;
-      ctx.fillText(vol, w - 180, formY);
-      formY += 40;
-    }
-  }
-
-  // 9. 底部品牌与印章
-  ctx.fillStyle = '#9CA3AF';
-  ctx.font = 'normal 20px sans-serif';
-  ctx.fillText('杯间 · 天天调饮记', 56, h - 80);
-  ctx.fillText(todayString.value, 56, h - 50);
-
-  // 印章
-  ctx.strokeStyle = '#DC2626';
-  ctx.lineWidth = 3;
-  ctx.strokeRect(w - 190, h - 120, 140, 70);
-  ctx.fillStyle = '#DC2626';
-  ctx.font = 'bold 20px sans-serif';
-  ctx.fillText('微醺特调', w - 175, h - 86);
-  ctx.font = 'normal 16px sans-serif';
-  ctx.fillText('完饮留念', w - 165, h - 62);
-
-  // 双重保底导出逻辑
-  let hasTriggered = false;
-  const doSaveToAlbum = () => {
-    if (hasTriggered) return;
-    hasTriggered = true;
-    clearTimeout(safetyLoadingTimer);
-
-    uni.canvasToTempFilePath({
-      canvasId: 'exportCanvas',
-      destWidth: 1400,
-      destHeight: 2200,
-      success: (res) => {
+  const query = uni.createSelectorQuery().in(instance?.proxy);
+  query.select('#exportCanvas')
+    .fields({ node: true, size: true })
+    .exec((res) => {
+      if (!res || !res[0] || !res[0].node) {
+        console.error('Canvas 2D node not found', res);
         uni.hideLoading();
-        uni.saveImageToPhotosAlbum({
-          filePath: res.tempFilePath,
-          success: () => {
-            uni.showToast({
-              title: '📸 海报已保存至相册！',
-              icon: 'success',
-              duration: 2000
+        uni.showToast({
+          title: '画布初始化失败，请重试',
+          icon: 'none'
+        });
+        return;
+      }
+
+      const canvas = res[0].node;
+      const ctx = canvas.getContext('2d');
+
+      const logicalW = 700;
+      const logicalH = 1100;
+      const dpr = 2; // Retina 2x 高清 (1400 x 2200)
+
+      canvas.width = logicalW * dpr;
+      canvas.height = logicalH * dpr;
+      ctx.scale(dpr, dpr);
+
+      const renderAllAndExport = (cocktailImg: any) => {
+        // 1. 背景卡片
+        ctx.fillStyle = '#FAF7F2';
+        ctx.fillRect(0, 0, logicalW, logicalH);
+
+        // 2. 顶部主视觉内衬
+        ctx.fillStyle = '#F3EFEA';
+        ctx.fillRect(36, 36, logicalW - 72, 430);
+
+        // 3. 绘制手绘鸡尾酒插画 (居中且保持宽高比)
+        if (cocktailImg && cocktailImg.width && cocktailImg.height) {
+          const maxW = 280;
+          const maxH = 340;
+          let drawW = maxW;
+          let drawH = maxH;
+          const aspect = cocktailImg.width / cocktailImg.height;
+          if (aspect > maxW / maxH) {
+            drawW = maxW;
+            drawH = maxW / aspect;
+          } else {
+            drawH = maxH;
+            drawW = maxH * aspect;
+          }
+          drawW = Math.round(drawW);
+          drawH = Math.round(drawH);
+          const imgX = Math.round((logicalW - drawW) / 2);
+          const imgY = Math.round(36 + (430 - drawH) / 2 + 15);
+          try {
+            ctx.drawImage(cocktailImg, imgX, imgY, drawW, drawH);
+          } catch (err) {
+            console.error('Canvas drawImage error:', err);
+          }
+        }
+
+        // 4. 绘制文字信息
+        ctx.fillStyle = '#9CA3AF';
+        ctx.font = 'normal 22px sans-serif';
+        ctx.fillText(`VOLUME 01 · NO.${recipeIndexStr.value}`, 56, 76);
+
+        ctx.fillStyle = '#B45309';
+        ctx.font = 'bold 22px sans-serif';
+        ctx.fillText(`${recipe.value?.calculatedAbv}% ABV`, logicalW - 170, 76);
+
+        // 5. 中文大字标题与英文
+        ctx.fillStyle = '#4B5563';
+        ctx.font = 'italic 26px Georgia, serif';
+        ctx.fillText(recipe.value?.nameEn || '', 56, 520);
+
+        ctx.fillStyle = '#111827';
+        ctx.font = 'bold 44px sans-serif';
+        ctx.fillText(recipe.value?.nameZh || '', 56, 580);
+
+        // 6. 金句语录
+        ctx.fillStyle = '#6B7280';
+        ctx.font = 'normal 22px sans-serif';
+        const quote = displayNotes.value.slice(0, 30);
+        ctx.fillText(`“${quote}”`, 56, 630);
+
+        // 7. 比例条
+        let startX = 56;
+        const barY = 665;
+        const barWidth = logicalW - 112;
+        const barHeight = 24;
+        for (const seg of ratioSegments.value) {
+          const sw = (seg.percent / 100) * barWidth;
+          ctx.fillStyle = seg.color;
+          ctx.fillRect(startX, barY, sw, barHeight);
+          startX += sw;
+        }
+
+        // 8. 配方清单
+        ctx.fillStyle = '#9CA3AF';
+        ctx.font = 'bold 20px sans-serif';
+        ctx.fillText('RECIPE FORMULA', 56, 730);
+
+        let formY = 770;
+        if (recipe.value) {
+          for (const item of recipe.value.ingredients.slice(0, 5)) {
+            ctx.fillStyle = '#374151';
+            ctx.font = 'normal 22px sans-serif';
+            ctx.fillText(`• ${getIngredientName(item.ingredientId)}`, 56, formY);
+
+            ctx.fillStyle = '#B45309';
+            ctx.font = 'bold 22px sans-serif';
+            const vol = item.customUnit ? item.customUnit : `${item.amountMl} ml`;
+            ctx.fillText(vol, logicalW - 180, formY);
+            formY += 40;
+          }
+        }
+
+        // 9. 底部品牌与印章
+        ctx.fillStyle = '#9CA3AF';
+        ctx.font = 'normal 20px sans-serif';
+        ctx.fillText('杯间 · 天天调饮记', 56, logicalH - 80);
+        ctx.fillText(todayString.value, 56, logicalH - 50);
+
+        // 印章
+        ctx.strokeStyle = '#DC2626';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(logicalW - 190, logicalH - 120, 140, 70);
+        ctx.fillStyle = '#DC2626';
+        ctx.font = 'bold 20px sans-serif';
+        ctx.fillText('微醺特调', logicalW - 175, logicalH - 86);
+        ctx.font = 'normal 16px sans-serif';
+        ctx.fillText('完饮留念', logicalW - 165, logicalH - 62);
+
+        // 10. Canvas 2D 导出到临时文件（无需 ctx.draw 回调，同层渲染直接读取内存缓冲区）
+        uni.canvasToTempFilePath({
+          canvas,
+          destWidth: logicalW * dpr,
+          destHeight: logicalH * dpr,
+          success: (tempRes) => {
+            uni.hideLoading();
+            uni.saveImageToPhotosAlbum({
+              filePath: tempRes.tempFilePath,
+              success: () => {
+                uni.showToast({
+                  title: '📸 海报已保存至相册！',
+                  icon: 'success',
+                  duration: 2000
+                });
+              },
+              fail: (err) => {
+                console.warn('saveImageToPhotosAlbum fail:', err);
+                uni.showToast({
+                  title: '请在手机微信中长按保存',
+                  icon: 'none'
+                });
+              }
             });
           },
           fail: (err) => {
-            console.warn('saveImageToPhotosAlbum fail:', err);
+            console.error('canvasToTempFilePath fail:', err);
+            uni.hideLoading();
             uni.showToast({
-              title: '请在手机微信中长按保存',
+              title: '海报导出失败，请重试',
               icon: 'none'
             });
           }
-        });
-      },
-      fail: (err) => {
-        console.error('canvasToTempFilePath fail:', err);
-        uni.hideLoading();
-        uni.showToast({
-          title: '海报生成失败，请重试',
-          icon: 'none'
-        });
+        }, instance?.proxy);
+      };
+
+      // 创建图片对象并监听加载
+      const rawSrc = posterImageSrc.value;
+      if (!rawSrc) {
+        renderAllAndExport(null);
+        return;
       }
+
+      let isImageHandled = false;
+      const img = canvas.createImage();
+
+      // 超时熔断保护：若图片加载超过 800ms，不等图片直接渲染导出，绝不卡死
+      const imgTimeout = setTimeout(() => {
+        if (!isImageHandled) {
+          isImageHandled = true;
+          console.warn('Image load timed out in canvas 2d, rendering text only');
+          renderAllAndExport(null);
+        }
+      }, 800);
+
+      img.onload = () => {
+        if (!isImageHandled) {
+          isImageHandled = true;
+          clearTimeout(imgTimeout);
+          renderAllAndExport(img);
+        }
+      };
+
+      img.onerror = (err) => {
+        if (!isImageHandled) {
+          isImageHandled = true;
+          clearTimeout(imgTimeout);
+          console.warn('Image load error in canvas 2d', err);
+          renderAllAndExport(null);
+        }
+      };
+
+      // 赋值根绝对路径
+      img.src = rawSrc;
     });
-  };
-
-  // 渲染并保存：尝试正常等待 draw 完成
-  ctx.draw(false, () => {
-    setTimeout(doSaveToAlbum, 100);
-  });
-
-  // 超时保底：500ms 后微信渲染若未响应 draw 回调，强制导出并关掉 loading，绝不卡死
-  setTimeout(() => {
-    if (!hasTriggered) {
-      console.warn('ctx.draw callback timed out, executing fallback export');
-      doSaveToAlbum();
-    }
-  }, 500);
 }
 
 function goBack() {
