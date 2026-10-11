@@ -56,11 +56,24 @@ export const useFavoritesStore = defineStore('favorites', () => {
     }
   }
 
+  function removeTastingLog(id: string) {
+    const idx = tastingLogs.value.findIndex(l => l.id === id);
+    if (idx >= 0) {
+      tastingLogs.value.splice(idx, 1);
+      try {
+        uni.setStorageSync(STORAGE_KEY_LOGS, tastingLogs.value);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  }
+
   return {
     favoriteIds,
     tastingLogs,
     isFavorite,
     toggleFavorite,
     addTastingLog,
+    removeTastingLog,
   };
 });
