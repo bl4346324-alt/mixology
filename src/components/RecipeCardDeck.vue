@@ -72,7 +72,7 @@
           <view class="index-badge">
             <text class="seq-num">{{ formatIndex(currentIndex) }}</text>
             <text class="slash">/</text>
-            <text class="category-title">{{ getCategoryName(currentRecipe.category) }}</text>
+            <text class="category-title">{{ moodName ? '#' + moodName : getCategoryName(currentRecipe.category) }}</text>
           </view>
 
           <!-- 收藏书签 Ribbon -->
@@ -157,7 +157,7 @@
         <text class="counter-num">
           {{ currentIndex + 1 }} <text class="counter-total">/ {{ recipes.length }}</text>
         </text>
-        <text class="counter-hint">左右轻扫 · 抽出配方</text>
+        <text class="counter-hint">{{ moodName ? `左右轻扫 · 抽取 #${moodName} 配方` : '左右轻扫 · 抽出配方' }}</text>
       </view>
 
       <!-- 下一张 -->
@@ -184,9 +184,15 @@ import type { Recipe } from '../types/recipe';
 import { useFavoritesStore } from '../stores/favorites';
 import { useCabinetStore } from '../stores/cabinet';
 
-const props = defineProps<{
-  recipes: Recipe[];
-}>();
+const props = withDefaults(
+  defineProps<{
+    recipes: Recipe[];
+    moodName?: string;
+  }>(),
+  {
+    moodName: '',
+  }
+);
 
 const emit = defineEmits<{
   (e: 'select', recipe: Recipe): void;

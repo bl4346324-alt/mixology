@@ -35,6 +35,29 @@
       <text v-if="searchQuery" class="clear-icon" @tap="searchQuery = ''">✕</text>
     </view>
 
+    <!-- 抖音同款生活情境话题栏 (Mood & Scene Topics) -->
+    <view class="mood-topics-wrapper">
+      <scroll-view scroll-x class="mood-topics-scroll" :show-scrollbar="false">
+        <view class="mood-topics-list">
+          <view
+            v-for="scene in moodScenes"
+            :key="scene.id"
+            class="mood-topic-pill"
+            :class="{ active: currentMood === scene.id }"
+            @tap="setMoodScene(scene.id)"
+          >
+            <text class="mood-emoji">{{ scene.emoji }}</text>
+            <text class="mood-tag">#{{ scene.name }}</text>
+          </view>
+        </view>
+      </scroll-view>
+      <!-- 场景氛围微提示 -->
+      <view v-if="currentMood !== 'all'" class="mood-scene-hint">
+        <text class="hint-quote">“{{ activeMoodScene.desc }}”</text>
+        <text class="hint-count">精选 {{ filteredRecipes.length }} 款特调</text>
+      </view>
+    </view>
+
     <!-- 分类标签滑动条 -->
     <scroll-view scroll-x class="category-scroll" :show-scrollbar="false">
       <view class="category-list">
@@ -54,6 +77,7 @@
     <view v-if="viewMode === 'deck'" class="deck-view-wrapper">
       <RecipeCardDeck
         :recipes="filteredRecipes"
+        :mood-name="currentMood !== 'all' ? activeMoodScene.name : ''"
         @select="onDeckSelect"
       />
     </view>
@@ -132,7 +156,112 @@ function onDeckSelect(recipe: Recipe) {
 
 const searchQuery = ref('');
 const currentCategory = ref<string>('all');
+const currentMood = ref<string>('all');
 const sortBy = ref<'default' | 'abv-asc' | 'abv-desc'>('default');
+
+export interface MoodScene {
+  id: string;
+  name: string;
+  emoji: string;
+  desc: string;
+  recipeIds?: string[];
+  matchFn?: (recipe: Recipe) => boolean;
+}
+
+const moodScenes: MoodScene[] = [
+  {
+    id: 'all',
+    name: '全部特调',
+    emoji: '🍸',
+    desc: '全本调饮手册，随心挑选',
+  },
+  {
+    id: 'nightcap',
+    name: '晚安微醺',
+    emoji: '🌙',
+    desc: '深夜独酌，温润甜美，卸下一天疲惫',
+    recipeIds: [
+      'black_russian',
+      'white_russian',
+      'baileys_iced_latte',
+      'espresso_martini',
+      'coconut_rum_latte',
+      'old_fashioned',
+      'godfather',
+      'boulevardier',
+      'dahongpao_old_fashioned',
+      'b52',
+    ],
+  },
+  {
+    id: 'decompress',
+    name: '假期解压',
+    emoji: '🛋️',
+    desc: '结束假期与高压工作，1杯解千愁',
+    recipeIds: [
+      'long_island_iced_tea',
+      'cuba_libre',
+      'gin_and_tonic',
+      'ice_tea_bomb',
+      'negroni',
+      'manhattan',
+      'whiskey_sour',
+      'jager_redbull',
+      'tom_collins',
+      'cola_bucket_whiskey',
+    ],
+  },
+  {
+    id: 'convenience',
+    name: '便利店快手',
+    emoji: '🏪',
+    desc: '便利店软饮+小瓶基酒，30秒即调',
+    matchFn: (r) => r.category === 'convenience',
+  },
+  {
+    id: 'party',
+    name: '周末聚会出片',
+    emoji: '🥂',
+    desc: '高颜值渐变分层，朋友聚会焦点',
+    recipeIds: [
+      'margarita',
+      'tequila_sunrise',
+      'zombie',
+      'cosmopolitan',
+      'french_75',
+      'pina_colada',
+      'moscow_mule',
+      'aperol_spritz',
+      'cinderella',
+      'grape_soju_fizz',
+    ],
+  },
+  {
+    id: 'mocktail',
+    name: '清醒不醉',
+    emoji: '🍃',
+    desc: '0% 无酒精负担，果香与草本气泡',
+    matchFn: (r) => r.category === 'mocktail' || r.calculatedAbv === 0,
+  },
+  {
+    id: 'tea',
+    name: '新中式茶韵',
+    emoji: '🍵',
+    desc: '冷萃茶香浸润烈酒，东方清雅意境',
+    matchFn: (r) => r.category === 'tea_cocktail' || r.tags.some(t => t.includes('茶')),
+  },
+];
+
+function setMoodScene(moodId: string) {
+  currentMood.value = moodId;
+  try {
+    uni.vibrateShort({ type: 'light' });
+  } catch (_) {}
+}
+
+const activeMoodScene = computed(() => {
+  return moodScenes.find(m => m.id === currentMood.value) || moodScenes[0];
+});
 
 const categories = [
   { id: 'all', name: '全部灵感' },
@@ -165,12 +294,24 @@ function toggleSort() {
 const filteredRecipes = computed(() => {
   let list = RECIPES;
 
-  // 1. 分类筛选
+  // 1. 情绪生活场景筛选
+  if (currentMood.value !== 'all') {
+    const scene = moodScenes.find(m => m.id === currentMood.value);
+    if (scene) {
+      if (scene.matchFn) {
+        list = list.filter(scene.matchFn);
+      } else if (scene.recipeIds) {
+        list = list.filter(r => scene.recipeIds!.includes(r.id));
+      }
+    }
+  }
+
+  // 2. 分类筛选
   if (currentCategory.value !== 'all') {
     list = list.filter(r => r.category === currentCategory.value);
   }
 
-  // 2. 搜索词筛选 (酒名中文、英文、标签、描述、原料名称)
+  // 3. 搜索词筛选 (酒名中文、英文、标签、描述、原料名称)
   if (searchQuery.value.trim()) {
     const q = searchQuery.value.trim().toLowerCase();
     list = list.filter(r => 
@@ -185,7 +326,7 @@ const filteredRecipes = computed(() => {
     );
   }
 
-  // 3. 排序
+  // 4. 排序
   if (sortBy.value === 'abv-asc') {
     list = [...list].sort((a, b) => a.calculatedAbv - b.calculatedAbv);
   } else if (sortBy.value === 'abv-desc') {
@@ -336,6 +477,78 @@ function goToRecipe(id: string) {
   font-size: 26rpx;
   color: #9CA3AF;
   padding: 4rpx 10rpx;
+}
+
+/* 抖音同款生活情绪场景标签滑轨 */
+.mood-topics-wrapper {
+  margin-bottom: 22rpx;
+}
+
+.mood-topics-scroll {
+  white-space: nowrap;
+  width: 100%;
+}
+
+.mood-topics-list {
+  display: inline-flex;
+  gap: 14rpx;
+  padding: 4rpx 0;
+}
+
+.mood-topic-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8rpx;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 10rpx 22rpx;
+  border-radius: 999rpx;
+  transition: all 0.25s ease;
+  cursor: pointer;
+
+  &:active {
+    transform: scale(0.95);
+  }
+
+  &.active {
+    background: #FAF7F2;
+    border-color: #FAF7F2;
+    box-shadow: 0 4rpx 16rpx rgba(250, 247, 242, 0.25);
+
+    .mood-tag {
+      color: #111827;
+      font-weight: 800;
+    }
+  }
+}
+
+.mood-emoji {
+  font-size: 24rpx;
+}
+
+.mood-tag {
+  font-size: 22rpx;
+  color: #D1D5DB;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.mood-scene-hint {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10rpx 12rpx 0 12rpx;
+}
+
+.hint-quote {
+  font-size: 21rpx;
+  color: #F59E0B;
+  font-style: italic;
+}
+
+.hint-count {
+  font-size: 20rpx;
+  color: #9CA3AF;
 }
 
 .category-scroll {
