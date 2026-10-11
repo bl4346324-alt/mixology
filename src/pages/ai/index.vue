@@ -71,70 +71,178 @@
         :disabled="isGenerating"
         @tap="generateCocktail"
       >
-        <text v-if="!isGenerating">🪄 唤醒侍酒师 · 生成特调配方</text>
+        <text v-if="!isGenerating">🪄 唤醒侍酒师 · 测算专属风味</text>
         <text v-else>正在品鉴推演风味平衡...</text>
       </button>
     </view>
 
-    <!-- 生成结果展示卡片 -->
-    <view v-if="generatedResult" class="result-card glass-card-amber">
-      <view class="result-badge">专属定制特调</view>
-      
-      <view class="result-top">
-        <view class="result-names">
-          <text class="result-zh">{{ generatedResult.nameZh }}</text>
-          <text class="result-en">{{ generatedResult.nameEn }}</text>
+    <!-- 抖音同款复古活页特调卡片 (Retro Journal Custom Card) -->
+    <view v-if="generatedResult" class="journal-result-wrap">
+      <view class="ai-journal-card">
+        <!-- 活页打孔装订孔装饰 -->
+        <view class="binder-holes-row">
+          <view class="binder-dot" />
+          <view class="binder-dot" />
+          <view class="binder-dot" />
         </view>
-        <text class="result-abv">{{ generatedResult.calculatedAbv }}% ABV</text>
+
+        <view class="journal-card-body">
+          <!-- 卡片头部：定制序号、酒精度、双语名称、手绘插画 -->
+          <view class="card-header-row">
+            <view class="header-left">
+              <view class="custom-badge-group">
+                <text class="custom-tag">✨ AI EXCLUSIVE</text>
+                <text class="abv-badge">{{ generatedResult.calculatedAbv }}% ABV</text>
+              </view>
+              <text class="journal-name-en">{{ generatedResult.nameEn }}</text>
+              <text class="journal-name-zh">{{ generatedResult.nameZh }}</text>
+            </view>
+
+            <!-- 右侧手绘酒杯高清插画 -->
+            <view class="header-right-visual">
+              <image
+                class="ai-glass-img"
+                :src="generatedResult.coverImage || '/static/recipes/suntory_oolong_highball.png'"
+                mode="aspectFit"
+              />
+            </view>
+          </view>
+
+          <!-- 微醺故事与金句语录 -->
+          <view class="journal-story-box">
+            <text class="story-quote-symbol">“</text>
+            <text class="story-content">{{ generatedResult.story }}</text>
+            <text class="story-quote-symbol">”</text>
+          </view>
+
+          <!-- 黄金调饮比例色条 (Mini Parts Ratio) -->
+          <view v-if="ratioSegments.length > 0" class="mini-ratio-wrap">
+            <view class="ratio-header">
+              <text class="rh-title">PARTS RATIO 调饮比例</text>
+            </view>
+            <view class="ratio-track">
+              <view
+                v-for="seg in ratioSegments"
+                :key="seg.id"
+                class="ratio-seg"
+                :style="{ width: seg.percent + '%', backgroundColor: seg.color }"
+              >
+                <text v-if="seg.percent >= 14" class="seg-text">{{ seg.shortName }}</text>
+              </view>
+            </view>
+          </view>
+
+          <!-- 五维风味雷达图与风味标签 -->
+          <view class="radar-section">
+            <view class="radar-title">风味特征推演：</view>
+            <view class="radar-container">
+              <FlavorRadar :flavor="generatedResult.flavor" :size="200" />
+            </view>
+            <view class="tags-cloud">
+              <text v-for="(t, idx) in generatedResult.tags" :key="idx" class="flavor-tag">
+                #{{ t }}
+              </text>
+            </view>
+          </view>
+
+          <!-- 调配原料清单 -->
+          <view class="formula-box">
+            <view class="formula-title">RECIPE FORMULA 原料清单</view>
+            <view class="formula-list">
+              <view
+                v-for="(item, idx) in generatedResult.ingredients"
+                :key="idx"
+                class="formula-item"
+              >
+                <text class="f-dot">•</text>
+                <text class="f-name">{{ getIngredientName(item.ingredientId) }}</text>
+                <text class="f-val">
+                  {{ item.customUnit ? item.customUnit : item.amountMl + ' ml' }}
+                </text>
+              </view>
+            </view>
+          </view>
+
+          <!-- 制作步骤清单 -->
+          <view class="steps-box">
+            <view class="steps-title">CRAFT STEPS 调饮步骤</view>
+            <view
+              v-for="step in generatedResult.steps"
+              :key="step.step"
+              class="step-item"
+            >
+              <text class="step-badge">{{ step.step }}</text>
+              <text class="step-text">{{ step.description }}</text>
+            </view>
+          </view>
+
+          <!-- 底部红泥印章 -->
+          <view class="journal-seal-row">
+            <view class="ai-seal">
+              <text class="seal-stars">★★★★★</text>
+              <text class="seal-name">AI侍酒特调</text>
+              <text class="seal-desc">独家配方</text>
+            </view>
+          </view>
+        </view>
       </view>
 
-      <text class="result-story">“{{ generatedResult.story }}”</text>
-
-      <!-- 五维风味雷达 -->
-      <view class="radar-box">
-        <FlavorRadar :flavor="generatedResult.flavor" :size="200" />
-      </view>
-
-      <!-- 配方原料表 -->
-      <view class="recipe-table">
-        <view class="table-title">调配原料清单：</view>
-        <view
-          v-for="(item, idx) in generatedResult.ingredients"
-          :key="idx"
-          class="table-row"
+      <!-- 三联王牌操作栏 (Action Trio) -->
+      <view class="trio-actions">
+        <button
+          class="action-btn-collect"
+          :class="{ collected: isCollected }"
+          @tap="toggleCollectToDeck"
         >
-          <text class="ing-name">{{ getIngredientName(item.ingredientId) }}</text>
-          <text class="ing-amount">
-            {{ item.customUnit ? item.customUnit : item.amountMl + ' ml' }}
-          </text>
-        </view>
-      </view>
+          <text>{{ isCollected ? '✓ 已收入卡盒' : '🎴 收录进微醺卡盒' }}</text>
+        </button>
 
-      <!-- 调酒步骤 -->
-      <view class="steps-section">
-        <view class="table-title">制作步骤：</view>
-        <view
-          v-for="step in generatedResult.steps"
-          :key="step.step"
-          class="step-line"
-        >
-          <text class="step-num">{{ step.step }}.</text>
-          <text class="step-desc">{{ step.description }}</text>
-        </view>
-      </view>
+        <button class="action-btn-poster" @tap="generatePosterDirectly">
+          <text>📸 拍立得海报</text>
+        </button>
 
-      <!-- 底部动作 -->
-      <view class="result-actions">
-        <button class="btn-gold action-btn" @tap="startCrafting">
-          进入调酒工作台制作
+        <button class="action-btn-craft btn-gold" @tap="startCrafting">
+          <text>🍸 前往制作</text>
         </button>
       </view>
+    </view>
+
+    <!-- 已收录的私房特调卡盒抽屉 (My Custom Deck Showcase) -->
+    <view v-if="collectedDeck.length > 0" class="custom-deck-section">
+      <view class="section-header">
+        <view class="sh-left">
+          <text class="sh-icon">🎴</text>
+          <text class="sh-title">我的私房特调卡盒 ({{ collectedDeck.length }})</text>
+        </view>
+        <text class="sh-tip">可在首页随时抽卡浏览</text>
+      </view>
+
+      <scroll-view scroll-x class="deck-scroll" :show-scrollbar="false">
+        <view class="deck-cards-row">
+          <view
+            v-for="item in collectedDeck"
+            :key="item.id"
+            class="custom-deck-card"
+            @tap="previewCustomRecipe(item)"
+          >
+            <image
+              class="cdc-img"
+              :src="item.coverImage || '/static/recipes/suntory_oolong_highball.png'"
+              mode="aspectFit"
+            />
+            <view class="cdc-info">
+              <text class="cdc-name-zh">{{ item.nameZh }}</text>
+              <text class="cdc-abv">{{ item.calculatedAbv }}% ABV</text>
+            </view>
+          </view>
+        </view>
+      </scroll-view>
     </view>
   </view>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import type { Recipe } from '../../types/recipe';
 import { INGREDIENTS_MAP } from '../../data/ingredients';
 import FlavorRadar from '../../components/FlavorRadar.vue';
@@ -165,6 +273,25 @@ const selectedAbv = ref('low');
 const customInput = ref('');
 const isGenerating = ref(false);
 const generatedResult = ref<Recipe | null>(null);
+const collectedDeck = ref<Recipe[]>([]);
+
+onMounted(() => {
+  loadCollectedDeck();
+});
+
+function loadCollectedDeck() {
+  try {
+    const saved = uni.getStorageSync('mixocraft_custom_deck');
+    if (Array.isArray(saved)) {
+      collectedDeck.value = saved;
+    }
+  } catch (_) {}
+}
+
+const isCollected = computed(() => {
+  if (!generatedResult.value) return false;
+  return collectedDeck.value.some(r => r.id === generatedResult.value?.id);
+});
 
 function applyPrompt(p: string) {
   customInput.value = p;
@@ -173,6 +300,46 @@ function applyPrompt(p: string) {
 function getIngredientName(id: string): string {
   return INGREDIENTS_MAP.get(id)?.nameZh || id;
 }
+
+// Mini 黄金比例色条计算
+interface RatioSegment {
+  id: string;
+  shortName: string;
+  percent: number;
+  color: string;
+}
+
+const INGREDIENT_COLORS: Record<string, string> = {
+  bourbon_whiskey: '#EA580C',
+  suntory_oolong: '#78350F',
+  dongfang_shuye_green: '#10B981',
+  lime_juice: '#84CC16',
+  simple_syrup: '#FDE68A',
+  soda_water: '#BAE6FD',
+  gin: '#6EE7B7',
+  vodka: '#93C5FD',
+};
+const defaultColors = ['#F59E0B', '#3B82F6', '#10B981', '#EC4899', '#8B5CF6'];
+
+const ratioSegments = computed<RatioSegment[]>(() => {
+  if (!generatedResult.value) return [];
+  const liquids = generatedResult.value.ingredients.filter(item => item.amountMl && item.amountMl > 0);
+  if (liquids.length === 0) return [];
+  const totalMl = liquids.reduce((acc, cur) => acc + cur.amountMl, 0);
+  if (totalMl <= 0) return [];
+
+  return liquids.map((item, idx) => {
+    const name = getIngredientName(item.ingredientId).split('/')[0].trim().slice(0, 4);
+    const percent = Math.round((item.amountMl / totalMl) * 100);
+    const color = INGREDIENT_COLORS[item.ingredientId] || defaultColors[idx % defaultColors.length];
+    return {
+      id: item.ingredientId,
+      shortName: name,
+      percent,
+      color,
+    };
+  });
+});
 
 // 模拟基于风味规则模型的智能配方生成引擎
 function generateCocktail() {
@@ -288,34 +455,87 @@ function generateCocktail() {
       };
     }
 
+    // 缓存生成的当前配方
+    try {
+      uni.setStorageSync('mixocraft_custom_recipe', generatedResult.value);
+    } catch (_) {}
+
     uni.showToast({
       title: '特调配方生成完成！',
       icon: 'success'
     });
-  }, 1000);
+  }, 900);
 }
 
+// 🎴 收录至微醺卡盒
+function toggleCollectToDeck() {
+  if (!generatedResult.value) return;
+  const current = generatedResult.value;
+  const idx = collectedDeck.value.findIndex(r => r.id === current.id);
+
+  if (idx >= 0) {
+    collectedDeck.value.splice(idx, 1);
+    uni.showToast({ title: '已从卡盒移出', icon: 'none' });
+  } else {
+    collectedDeck.value.unshift(current);
+    try {
+      uni.vibrateShort({ type: 'medium' });
+    } catch (_) {}
+    uni.showToast({ title: '🎴 已收录进微醺卡盒！', icon: 'success' });
+  }
+
+  try {
+    uni.setStorageSync('mixocraft_custom_deck', collectedDeck.value);
+    uni.setStorageSync('mixocraft_custom_recipe', current);
+  } catch (e) {
+    console.error('Failed to update custom deck', e);
+  }
+}
+
+// 📸 生成拍立得海报
+function generatePosterDirectly() {
+  if (!generatedResult.value) return;
+  try {
+    uni.setStorageSync('mixocraft_custom_recipe', generatedResult.value);
+  } catch (_) {}
+  const curId = generatedResult.value.id;
+  const notes = encodeURIComponent(generatedResult.value.description);
+  uni.navigateTo({
+    url: `/pages/recipe/poster?id=${curId}&rating=5&notes=${notes}`
+  });
+}
+
+// 🍸 前往工作台制作
 function startCrafting() {
   if (generatedResult.value) {
     try {
-      // 将 AI 定制配方存入本地临时存储，确保调酒工作台能直接读取并完整渲染步骤
       uni.setStorageSync('mixocraft_custom_recipe', generatedResult.value);
-    } catch (e) {
-      console.error('Failed to cache AI recipe', e);
-    }
-    // 传递进入工作台
+    } catch (_) {}
     uni.navigateTo({
       url: `/pages/recipe/craft?id=${generatedResult.value.id}`
     });
   }
 }
+
+// 查看历史收录的私房特调
+function previewCustomRecipe(recipe: Recipe) {
+  generatedResult.value = recipe;
+  try {
+    uni.setStorageSync('mixocraft_custom_recipe', recipe);
+  } catch (_) {}
+  uni.showToast({
+    title: `已调出《${recipe.nameZh}》`,
+    icon: 'none'
+  });
+}
 </script>
 
 <style scoped lang="scss">
 .container {
-  padding: 30rpx 30rpx 100rpx 30rpx;
+  padding: 30rpx 30rpx 140rpx 30rpx;
   background-color: #0E0F14;
   min-height: 100vh;
+  box-sizing: border-box;
 }
 
 .ai-header {
@@ -353,79 +573,81 @@ function startCrafting() {
   color: #9CA3AF;
   margin-top: 4rpx;
   display: block;
-  line-height: 1.4;
 }
 
 .quick-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 12rpx;
+  gap: 14rpx;
   margin-bottom: 28rpx;
 }
 
 .chip-item {
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #D1D5DB;
-  font-size: 22rpx;
-  padding: 8rpx 20rpx;
+  padding: 10rpx 22rpx;
   border-radius: 999rpx;
-}
+  font-size: 22rpx;
+  color: #D1D5DB;
+  transition: all 0.2s ease;
 
-.chip-item:active {
-  background: rgba(245, 158, 11, 0.2);
-  border-color: #F59E0B;
-  color: #FDE68A;
+  &:active {
+    background: rgba(245, 158, 11, 0.15);
+    color: #FDE68A;
+  }
 }
 
 .preference-card {
-  padding: 28rpx;
-  margin-bottom: 34rpx;
+  padding: 32rpx;
+  margin-bottom: 36rpx;
+  border-radius: 24rpx;
 }
 
 .pref-row {
-  margin-bottom: 24rpx;
+  margin-bottom: 28rpx;
 }
 
 .pref-label {
   font-size: 24rpx;
-  color: #9CA3AF;
-  margin-bottom: 12rpx;
+  font-weight: 700;
+  color: #E5E7EB;
+  margin-bottom: 14rpx;
   display: block;
 }
 
 .mood-options, .abv-options {
   display: flex;
   flex-wrap: wrap;
-  gap: 12rpx;
+  gap: 14rpx;
 }
 
 .mood-chip, .abv-chip {
-  background: rgba(255, 255, 255, 0.04);
+  padding: 12rpx 24rpx;
+  border-radius: 16rpx;
+  background: rgba(0, 0, 0, 0.3);
   border: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 24rpx;
   color: #9CA3AF;
-  font-size: 22rpx;
-  padding: 10rpx 22rpx;
-  border-radius: 999rpx;
   transition: all 0.2s ease;
-}
 
-.mood-chip.active, .abv-chip.active {
-  background: rgba(245, 158, 11, 0.18);
-  border-color: #F59E0B;
-  color: #FDE68A;
-  font-weight: 600;
+  &.active {
+    background: #F59E0B;
+    border-color: #F59E0B;
+    color: #000000;
+    font-weight: 800;
+  }
 }
 
 .input-wrap {
-  margin-bottom: 24rpx;
+  margin-top: 20rpx;
+  margin-bottom: 28rpx;
 }
 
 .custom-textarea {
   width: 100%;
-  height: 160rpx;
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  height: 150rpx;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 16rpx;
   padding: 20rpx;
   font-size: 24rpx;
@@ -440,117 +662,472 @@ function startCrafting() {
 .generate-btn {
   width: 100%;
   font-size: 28rpx;
+  font-weight: 800;
+  padding: 24rpx 0;
+  border-radius: 18rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.generate-btn.loading {
-  opacity: 0.7;
+/* 抖音同款复古活页特调卡片 (Retro Journal Card) */
+.journal-result-wrap {
+  margin-top: 10rpx;
+  margin-bottom: 40rpx;
 }
 
-/* 结果卡片 */
-.result-card {
-  padding: 30rpx;
-  position: relative;
+.ai-journal-card {
+  background: #FAF7F2;
+  border-radius: 28rpx;
   overflow: hidden;
+  box-shadow: 0 16rpx 50rpx rgba(0, 0, 0, 0.55);
+}
+
+.binder-holes-row {
+  height: 24rpx;
+  background: #EDE8DF;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  padding: 0 80rpx;
+  border-bottom: 1px dashed rgba(0, 0, 0, 0.1);
+}
+
+.binder-dot {
+  width: 12rpx;
+  height: 12rpx;
+  border-radius: 50%;
+  background: #111827;
+  opacity: 0.6;
+}
+
+.journal-card-body {
+  padding: 34rpx 36rpx;
+}
+
+.card-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20rpx;
+}
+
+.header-left {
+  flex: 1;
+  padding-right: 20rpx;
+}
+
+.custom-badge-group {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  margin-bottom: 8rpx;
+}
+
+.custom-tag {
+  font-size: 18rpx;
+  font-weight: 900;
+  color: #B45309;
+  letter-spacing: 0.5px;
+}
+
+.abv-badge {
+  background: #FEF3C7;
+  color: #92400E;
+  border: 1px solid #FDE68A;
+  font-size: 18rpx;
+  font-weight: 800;
+  padding: 2rpx 12rpx;
+  border-radius: 999rpx;
+}
+
+.journal-name-en {
+  font-size: 24rpx;
+  font-style: italic;
+  font-family: 'Baskerville', 'Georgia', serif;
+  color: #4B5563;
+  display: block;
+}
+
+.journal-name-zh {
+  font-size: 44rpx;
+  font-weight: 900;
+  color: #111827;
+  letter-spacing: 0.5px;
+  line-height: 1.2;
+  margin-top: 4rpx;
+  display: block;
+}
+
+.header-right-visual {
+  width: 160rpx;
+  height: 190rpx;
+  background: #F3EFEA;
+  border-radius: 20rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10rpx;
+  box-sizing: border-box;
+}
+
+.ai-glass-img {
+  width: 140rpx;
+  height: 170rpx;
+  display: block;
+}
+
+.journal-story-box {
+  background: #F3EFEA;
+  border-radius: 16rpx;
+  padding: 18rpx 22rpx;
+  margin-bottom: 24rpx;
+  display: flex;
+  align-items: flex-start;
+  gap: 6rpx;
+}
+
+.story-quote-symbol {
+  font-size: 30rpx;
+  font-family: 'Georgia', serif;
+  color: #B45309;
+  line-height: 1;
+}
+
+.story-content {
+  flex: 1;
+  font-size: 22rpx;
+  color: #4B5563;
+  line-height: 1.5;
+  font-style: italic;
+}
+
+/* 黄金比例色条 */
+.mini-ratio-wrap {
+  margin-bottom: 24rpx;
+}
+
+.ratio-header {
+  margin-bottom: 8rpx;
+}
+
+.rh-title {
+  font-size: 18rpx;
+  font-weight: 800;
+  color: #9CA3AF;
+  letter-spacing: 0.5px;
+}
+
+.ratio-track {
+  width: 100%;
+  height: 32rpx;
+  background: rgba(0, 0, 0, 0.08);
+  border-radius: 8rpx;
+  overflow: hidden;
+  display: flex;
+}
+
+.ratio-seg {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-right: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.seg-text {
+  font-size: 16rpx;
+  font-weight: 800;
+  color: #111827;
+  white-space: nowrap;
+}
+
+/* 雷达与标签 */
+.radar-section {
+  background: #F3EFEA;
+  border-radius: 18rpx;
+  padding: 20rpx;
+  margin-bottom: 24rpx;
+}
+
+.radar-title {
+  font-size: 20rpx;
+  font-weight: 800;
+  color: #6B7280;
+  margin-bottom: 10rpx;
+}
+
+.radar-container {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 14rpx;
+}
+
+.tags-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10rpx;
+  justify-content: center;
+}
+
+.flavor-tag {
+  background: rgba(245, 158, 11, 0.12);
+  color: #92400E;
+  font-size: 20rpx;
+  font-weight: 700;
+  padding: 4rpx 14rpx;
+  border-radius: 999rpx;
+}
+
+/* 配方与步骤清单 */
+.formula-box, .steps-box {
+  background: #F3EFEA;
+  border-radius: 18rpx;
+  padding: 20rpx 24rpx;
+  margin-bottom: 20rpx;
+}
+
+.formula-title, .steps-title {
+  font-size: 18rpx;
+  font-weight: 800;
+  color: #9CA3AF;
+  letter-spacing: 0.5px;
+  margin-bottom: 12rpx;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  padding-bottom: 6rpx;
+}
+
+.formula-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.formula-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 22rpx;
+}
+
+.f-dot {
+  color: #B45309;
+  margin-right: 6rpx;
+}
+
+.f-name {
+  color: #374151;
+  font-weight: 600;
+  flex: 1;
+}
+
+.f-val {
+  color: #B45309;
+  font-weight: 800;
+}
+
+.step-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12rpx;
+  margin-bottom: 8rpx;
+}
+
+.step-badge {
+  background: #B45309;
+  color: #FFFFFF;
+  font-size: 18rpx;
+  font-weight: 800;
+  width: 28rpx;
+  height: 28rpx;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 4rpx;
+}
+
+.step-text {
+  font-size: 22rpx;
+  color: #4B5563;
+  line-height: 1.5;
+  flex: 1;
+}
+
+/* 火漆印章 */
+.journal-seal-row {
+  display: flex;
+  justify-content: flex-end;
   margin-top: 10rpx;
 }
 
-.result-badge {
-  position: absolute;
-  top: 0;
-  right: 0;
-  background: #F59E0B;
-  color: #000000;
-  font-size: 20rpx;
-  font-weight: 700;
-  padding: 6rpx 20rpx;
-  border-bottom-left-radius: 16rpx;
-}
-
-.result-top {
+.ai-seal {
+  border: 2px solid #DC2626;
+  border-radius: 10rpx;
+  padding: 4rpx 14rpx;
+  transform: rotate(-5deg);
   display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  margin-bottom: 16rpx;
+  flex-direction: column;
+  align-items: center;
+  background: rgba(220, 38, 38, 0.04);
 }
 
-.result-zh {
-  font-size: 38rpx;
-  font-weight: 800;
-  color: #FDE68A;
-  display: block;
+.seal-stars {
+  font-size: 12rpx;
+  color: #DC2626;
+  letter-spacing: 1px;
 }
 
-.result-en {
+.seal-name {
+  font-size: 18rpx;
+  font-weight: 900;
+  color: #DC2626;
+}
+
+.seal-desc {
+  font-size: 12rpx;
+  font-weight: 700;
+  color: #DC2626;
+}
+
+/* 三联王牌操作栏 */
+.trio-actions {
+  display: flex;
+  gap: 14rpx;
+  margin-top: 24rpx;
+}
+
+.action-btn-collect {
+  flex: 1.2;
   font-size: 22rpx;
-  color: #9CA3AF;
-  display: block;
-}
-
-.result-abv {
-  font-size: 28rpx;
   font-weight: 800;
-  color: #10B981;
-}
-
-.result-story {
-  font-size: 24rpx;
-  color: #D1D5DB;
-  font-style: italic;
-  line-height: 1.5;
-  margin-bottom: 20rpx;
-  display: block;
-}
-
-.radar-box {
+  background: rgba(255, 255, 255, 0.1);
+  color: #FDE68A;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  border-radius: 16rpx;
+  padding: 22rpx 0;
   display: flex;
+  align-items: center;
   justify-content: center;
-  margin: 10rpx 0 20rpx 0;
+
+  &.collected {
+    background: rgba(16, 185, 129, 0.2);
+    color: #34D399;
+    border-color: rgba(16, 185, 129, 0.5);
+  }
 }
 
-.table-title {
-  font-size: 26rpx;
-  font-weight: 700;
-  color: #FFFFFF;
-  margin-bottom: 12rpx;
+.action-btn-poster {
+  flex: 1;
+  font-size: 22rpx;
+  font-weight: 800;
+  background: #EDE8DF;
+  color: #374151;
+  border-radius: 16rpx;
+  padding: 22rpx 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.table-row {
+.action-btn-craft {
+  flex: 1.2;
+  font-size: 22rpx;
+  font-weight: 800;
+  border-radius: 16rpx;
+  padding: 22rpx 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 我的私房特调卡盒抽屉 (Custom Deck Section) */
+.custom-deck-section {
+  margin-top: 40rpx;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 24rpx;
+  padding: 24rpx;
+}
+
+.section-header {
   display: flex;
   justify-content: space-between;
-  padding: 10rpx 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  font-size: 24rpx;
+  align-items: center;
+  margin-bottom: 20rpx;
 }
 
-.ing-name {
+.sh-left {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+}
+
+.sh-icon {
+  font-size: 28rpx;
+}
+
+.sh-title {
+  font-size: 26rpx;
+  font-weight: 800;
   color: #E5E7EB;
 }
 
-.ing-amount {
+.sh-tip {
+  font-size: 20rpx;
   color: #F59E0B;
-  font-weight: 600;
 }
 
-.steps-section {
-  margin-top: 24rpx;
-  margin-bottom: 30rpx;
-}
-
-.step-line {
-  display: flex;
-  gap: 12rpx;
-  font-size: 24rpx;
-  color: #D1D5DB;
-  line-height: 1.5;
-  margin-bottom: 12rpx;
-}
-
-.step-num {
-  color: #F59E0B;
-  font-weight: 700;
-}
-
-.action-btn {
+.deck-scroll {
   width: 100%;
+  white-space: nowrap;
+}
+
+.deck-cards-row {
+  display: inline-flex;
+  gap: 16rpx;
+  padding: 4rpx 0;
+}
+
+.custom-deck-card {
+  width: 220rpx;
+  background: #FAF7F2;
+  border-radius: 18rpx;
+  padding: 16rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-shadow: 0 6rpx 20rpx rgba(0, 0, 0, 0.4);
+}
+
+.cdc-img {
+  width: 120rpx;
+  height: 140rpx;
+  margin-bottom: 8rpx;
+}
+
+.cdc-info {
+  width: 100%;
+  text-align: center;
+}
+
+.cdc-name-zh {
+  font-size: 22rpx;
+  font-weight: 800;
+  color: #111827;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+}
+
+.cdc-abv {
+  font-size: 18rpx;
+  font-weight: 700;
+  color: #B45309;
+  display: block;
+  margin-top: 2rpx;
 }
 </style>

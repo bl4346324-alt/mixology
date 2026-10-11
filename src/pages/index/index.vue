@@ -130,7 +130,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import { RECIPES } from '../../data/recipes';
+import { RECIPES, AI_CUSTOM_RECIPES } from '../../data/recipes';
 import { INGREDIENTS_MAP } from '../../data/ingredients';
 import type { Recipe, RecipeCategory } from '../../types/recipe';
 import RecipeCard from '../../components/RecipeCard.vue';
@@ -250,6 +250,13 @@ const moodScenes: MoodScene[] = [
     desc: '冷萃茶香浸润烈酒，东方清雅意境',
     matchFn: (r) => r.category === 'tea_cocktail' || r.tags.some(t => t.includes('茶')),
   },
+  {
+    id: 'ai_custom',
+    name: 'AI私房特调',
+    emoji: '✨',
+    desc: 'AI 侍酒师独家量身定制的私房微醺配方',
+    matchFn: (r) => r.id.startsWith('ai_') || r.tags?.some(t => t.includes('AI定制')),
+  },
 ];
 
 function setMoodScene(moodId: string) {
@@ -265,11 +272,33 @@ const activeMoodScene = computed(() => {
 
 const categories = [
   { id: 'all', name: '全部灵感' },
+  { id: 'ai', name: '✨ AI定制' },
   { id: 'iba', name: 'IBA 经典' },
   { id: 'convenience', name: '便利店特调' },
   { id: 'tea_cocktail', name: '新中式茶酒' },
   { id: 'mocktail', name: '无酒精' },
 ];
+
+// 全局可用酒谱列表：基础库 + AI预设特调 + 用户在AI侍酒师收录的私房特调
+const allAvailableRecipes = computed<Recipe[]>(() => {
+  const list = [...RECIPES];
+  for (const item of AI_CUSTOM_RECIPES) {
+    if (!list.some(r => r.id === item.id)) {
+      list.push(item);
+    }
+  }
+  try {
+    const customDeck = uni.getStorageSync('mixocraft_custom_deck');
+    if (Array.isArray(customDeck)) {
+      for (const item of customDeck) {
+        if (!list.some(r => r.id === item.id)) {
+          list.unshift(item); // 用户定制的私房特调置顶排列在卡盒最前
+        }
+      }
+    }
+  } catch (_) {}
+  return list;
+});
 
 const canMakeCount = computed(() => {
   return cabinetStore.canMakeRecipes.length;
@@ -292,7 +321,7 @@ function toggleSort() {
 }
 
 const filteredRecipes = computed(() => {
-  let list = RECIPES;
+  let list = allAvailableRecipes.value;
 
   // 1. 情绪生活场景筛选
   if (currentMood.value !== 'all') {
@@ -308,7 +337,11 @@ const filteredRecipes = computed(() => {
 
   // 2. 分类筛选
   if (currentCategory.value !== 'all') {
-    list = list.filter(r => r.category === currentCategory.value);
+    if (currentCategory.value === 'ai') {
+      list = list.filter(r => r.id.startsWith('ai_') || r.tags?.some(t => t.includes('AI定制')));
+    } else {
+      list = list.filter(r => r.category === currentCategory.value);
+    }
   }
 
   // 3. 搜索词筛选 (酒名中文、英文、标签、描述、原料名称)

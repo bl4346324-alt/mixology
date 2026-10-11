@@ -217,6 +217,11 @@ function getRecipeImage(recipe: Recipe | null): string {
   if (recipe.coverImage && recipe.coverImage.trim()) {
     return recipe.coverImage;
   }
+  if (recipe.id.startsWith('ai_')) {
+    return recipe.category === 'mocktail'
+      ? '/static/recipes/dongfang_shuye_highball.png'
+      : '/static/recipes/suntory_oolong_highball.png';
+  }
   return `/static/recipes/${recipe.id}.png`;
 }
 
@@ -431,6 +436,7 @@ function getCategoryName(category: string): string {
     case 'convenience': return '便利店特调';
     case 'tea_cocktail': return '新中式茶酒';
     case 'mocktail': return '无酒精特调';
+    case 'ai': return 'AI 侍酒定制';
     default: return '经典调配';
   }
 }
