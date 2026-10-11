@@ -268,9 +268,60 @@ const ratioSegments = computed<RatioSegment[]>(() => {
   });
 });
 
+// 解析图片以适配 Canvas 绘制
+interface ResolvedImage {
+  path: string;
+  width: number;
+  height: number;
+}
+
+function resolveImageInfo(src: string): Promise<ResolvedImage> {
+  return new Promise((resolve) => {
+    if (!src) {
+      return resolve({ path: '', width: 320, height: 420 });
+    }
+    uni.getImageInfo({
+      src,
+      success: (res) => {
+        resolve({
+          path: res.path || src,
+          width: res.width || 320,
+          height: res.height || 420,
+        });
+      },
+      fail: (err) => {
+        console.warn('First getImageInfo failed for', src, err);
+        const altSrc = src.startsWith('/') ? src.slice(1) : ('/' + src);
+        uni.getImageInfo({
+          src: altSrc,
+          success: (res2) => {
+            resolve({
+              path: res2.path || altSrc,
+              width: res2.width || 320,
+              height: res2.height || 420,
+            });
+          },
+          fail: (err2) => {
+            console.warn('Fallback getImageInfo also failed:', altSrc, err2);
+            resolve({ path: src, width: 320, height: 420 });
+          }
+        });
+      }
+    });
+  });
+}
+
 // 保存海报逻辑
-function savePoster() {
-  uni.showLoading({ title: '正在绘制海报...' });
+async function savePoster() {
+  uni.showLoading({ title: '正在绘制海报...', mask: true });
+
+  let imgInfo: ResolvedImage = { path: '', width: 320, height: 420 };
+  try {
+    imgInfo = await resolveImageInfo(posterImageSrc.value);
+  } catch (e) {
+    console.warn('Resolve image info error', e);
+  }
+
   const ctx = uni.createCanvasContext('exportCanvas');
   const w = 700;
   const h = 1100;
@@ -283,7 +334,34 @@ function savePoster() {
   ctx.fillStyle = '#F3EFEA';
   ctx.fillRect(36, 36, w - 72, 430);
 
-  // 3. 绘制文字信息
+  // 3. 绘制手绘鸡尾酒插画 (居中且保持宽高比)
+  if (imgInfo.path) {
+    const maxW = 280;
+    const maxH = 340;
+    let drawW = maxW;
+    let drawH = maxH;
+    if (imgInfo.width && imgInfo.height) {
+      const aspect = imgInfo.width / imgInfo.height;
+      if (aspect > maxW / maxH) {
+        drawW = maxW;
+        drawH = maxW / aspect;
+      } else {
+        drawH = maxH;
+        drawW = maxH * aspect;
+      }
+    }
+    drawW = Math.round(drawW);
+    drawH = Math.round(drawH);
+    const imgX = Math.round((w - drawW) / 2);
+    const imgY = Math.round(36 + (430 - drawH) / 2 + 15);
+    try {
+      ctx.drawImage(imgInfo.path, imgX, imgY, drawW, drawH);
+    } catch (err) {
+      console.error('Canvas drawImage error:', err);
+    }
+  }
+
+  // 4. 绘制文字信息
   ctx.fillStyle = '#9CA3AF';
   ctx.font = 'normal 22px sans-serif';
   ctx.fillText(`VOLUME 01 · NO.${recipeIndexStr.value}`, 56, 76);
@@ -292,7 +370,7 @@ function savePoster() {
   ctx.font = 'bold 22px sans-serif';
   ctx.fillText(`${recipe.value?.calculatedAbv}% ABV`, w - 170, 76);
 
-  // 4. 中文大字标题与英文
+  // 5. 中文大字标题与英文
   ctx.fillStyle = '#4B5563';
   ctx.font = 'italic 26px Georgia, serif';
   ctx.fillText(recipe.value?.nameEn || '', 56, 520);
@@ -301,13 +379,13 @@ function savePoster() {
   ctx.font = 'bold 44px sans-serif';
   ctx.fillText(recipe.value?.nameZh || '', 56, 580);
 
-  // 5. 金句语录
+  // 6. 金句语录
   ctx.fillStyle = '#6B7280';
   ctx.font = 'normal 22px sans-serif';
   const quote = displayNotes.value.slice(0, 30);
   ctx.fillText(`“${quote}”`, 56, 630);
 
-  // 6. 比例条
+  // 7. 比例条
   let startX = 56;
   const barY = 665;
   const barWidth = w - 112;
@@ -319,7 +397,7 @@ function savePoster() {
     startX += sw;
   }
 
-  // 7. 配方清单
+  // 8. 配方清单
   ctx.fillStyle = '#9CA3AF';
   ctx.font = 'bold 20px sans-serif';
   ctx.fillText('RECIPE FORMULA', 56, 730);
@@ -339,7 +417,7 @@ function savePoster() {
     }
   }
 
-  // 8. 底部品牌与印章
+  // 9. 底部品牌与印章
   ctx.fillStyle = '#9CA3AF';
   ctx.font = 'normal 20px sans-serif';
   ctx.fillText('杯间 · 天天调饮记', 56, h - 80);
@@ -373,7 +451,8 @@ function savePoster() {
                 duration: 2000
               });
             },
-            fail: () => {
+            fail: (err) => {
+              console.warn('saveImageToPhotosAlbum fail:', err);
               uni.showToast({
                 title: '请在手机微信中长按保存',
                 icon: 'none'
@@ -381,15 +460,16 @@ function savePoster() {
             }
           });
         },
-        fail: () => {
+        fail: (err) => {
+          console.error('canvasToTempFilePath fail:', err);
           uni.hideLoading();
           uni.showToast({
-            title: '海报绘制成功',
-            icon: 'success'
+            title: '海报生成失败，请重试',
+            icon: 'none'
           });
         }
       });
-    }, 250);
+    }, 300);
   });
 }
 
